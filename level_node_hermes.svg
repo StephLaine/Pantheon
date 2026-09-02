@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="300" viewBox="0 0 512 300" fill="none">
+  <defs>
+    <linearGradient id="shadowGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="sideGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E3BC63"/>
+      <stop offset="0.2" stop-color="#A9752D"/>
+      <stop offset="0.48" stop-color="#D2A84F"/>
+      <stop offset="0.72" stop-color="#7B5420"/>
+      <stop offset="1" stop-color="#B78234"/>
+    </linearGradient>
+
+    <linearGradient id="rimGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFF4BE"/>
+      <stop offset="0.18" stop-color="#E8C96B"/>
+      <stop offset="0.42" stop-color="#AF7A30"/>
+      <stop offset="0.68" stop-color="#F0D98A"/>
+      <stop offset="1" stop-color="#8D6222"/>
+    </linearGradient>
+
+    <radialGradient id="blueTop" cx="50%" cy="32%" r="70%">
+      <stop offset="0" stop-color="#6F9EFF"/>
+      <stop offset="0.22" stop-color="#4E7FE0"/>
+      <stop offset="0.62" stop-color="#2A58B8"/>
+      <stop offset="1" stop-color="#1A3E87"/>
+    </radialGradient>
+
+    <linearGradient id="innerRim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FDE8A1"/>
+      <stop offset="0.35" stop-color="#C89537"/>
+      <stop offset="0.7" stop-color="#F8DF8D"/>
+      <stop offset="1" stop-color="#A86E27"/>
+    </linearGradient>
+
+    <radialGradient id="gloss" cx="32%" cy="18%" r="55%">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.72"/>
+      <stop offset="0.35" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="blur"/>
+      <feOffset dy="8" result="offsetBlur"/>
+      <feColorMatrix in="offsetBlur" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.28 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <clipPath id="topClip">
+      <ellipse cx="256" cy="112" rx="165" ry="78"/>
+    </clipPath>
+  </defs>
+
+  <!-- Ground shadow -->
+  <ellipse cx="256" cy="227" rx="155" ry="33" fill="url(#shadowGrad)"/>
+
+  <g filter="url(#softShadow)">
+    <!-- Base side / cylinder -->
+    <path d="M91 112C91 69 165 34 256 34C347 34 421 69 421 112V156C421 199 347 234 256 234C165 234 91 199 91 156V112Z" fill="url(#sideGold)"/>
+
+    <!-- lower bevel highlight -->
+    <path d="M103 156C103 188 171 215 256 215C341 215 409 188 409 156V163C409 195 341 222 256 222C171 222 103 195 103 163V156Z" fill="#F2D893" fill-opacity="0.24"/>
+
+    <!-- underside lip -->
+    <ellipse cx="256" cy="156" rx="165" ry="78" fill="#754A1A" fill-opacity="0.35"/>
+
+    <!-- outer top rim -->
+    <ellipse cx="256" cy="112" rx="165" ry="78" fill="url(#rimGold)"/>
+
+    <!-- rim inner cutout -->
+    <ellipse cx="256" cy="112" rx="145" ry="66" fill="#B2782B"/>
+
+    <!-- inner gold ring -->
+    <ellipse cx="256" cy="112" rx="142" ry="63" fill="url(#innerRim)"/>
+
+    <!-- blue top face -->
+    <ellipse cx="256" cy="112" rx="126" ry="55" fill="url(#blueTop)"/>
+
+    <!-- blue face edge shading -->
+    <ellipse cx="256" cy="118" rx="126" ry="55" fill="#132B5F" fill-opacity="0.18"/>
+    <ellipse cx="256" cy="112" rx="126" ry="55" fill="url(#blueTop)"/>
+
+    <!-- gloss -->
+    <g clip-path="url(#topClip)">
+      <ellipse cx="221" cy="82" rx="95" ry="42" fill="url(#gloss)"/>
+      <path d="M146 99C171 73 224 58 275 59C307 59 334 66 357 82" stroke="#FFFFFF" stroke-opacity="0.34" stroke-width="6" stroke-linecap="round"/>
+    </g>
+
+    <!-- subtle rim highlights -->
+    <path d="M117 108C125 77 183 53 256 53C319 53 374 71 392 97" stroke="#FFF3C9" stroke-opacity="0.8" stroke-width="5" stroke-linecap="round"/>
+    <path d="M399 126C387 154 328 173 256 173C189 173 132 157 115 133" stroke="#7B5322" stroke-opacity="0.45" stroke-width="4" stroke-linecap="round"/>
+
+    <!-- decorative seams on side -->
+    <g opacity="0.35" stroke="#6C4618" stroke-width="3">
+      <path d="M143 129V175"/>
+      <path d="M188 139V194"/>
+      <path d="M233 145V204"/>
+      <path d="M279 145V204"/>
+      <path d="M324 139V194"/>
+      <path d="M369 129V175"/>
+    </g>
+    <g opacity="0.28" stroke="#F9DE9B" stroke-width="2">
+      <path d="M150 128V174"/>
+      <path d="M195 138V192"/>
+      <path d="M240 144V202"/>
+      <path d="M286 144V202"/>
+      <path d="M331 138V192"/>
+      <path d="M376 128V174"/>
+    </g>
+  </g>
+</svg>

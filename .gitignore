@@ -1,0 +1,6 @@
+.DS_Store
+*.tsbuildinfo
+
+# scratch duplicate of raw/ from before the tools/audio_prep.py pipeline existed
+audio_staging/
+raw/

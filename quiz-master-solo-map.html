@@ -1,0 +1,743 @@
+<!-- Quiz Master — Pantheon Path (solo mode, map-style level progression) -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz Master — Pantheon Path</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Cinzel+Decorative:wght@700;900&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="https://code.iconify.design/iconify-icon/1.0.8/iconify-icon.min.js"></script>
+
+<style>
+  :root{
+    /* marble & stone */
+    --marble:#F6F1E4;
+    --marble-dk:#E6DBC0;
+    --stone:#B7AE9A;
+    --stone-dk:#8B8270;
+    /* gold & bronze */
+    --gold:#FFC93C;
+    --gold-lt:#FFE79A;
+    --gold-dp:#C79A2E;
+    --bronze:#8A5A22;
+    --bronze-dk:#4A2E06;
+    /* ink & accents */
+    --ink:#241B3A;
+    --ink-soft:#6B5F86;
+    --red:#FF3B4E;
+    --green:#4CAF50;
+    --white:#ffffff;
+    --shadow-sm:0 6px 16px rgba(20,10,40,.28);
+    --shadow-md:0 12px 28px rgba(15,8,35,.34);
+    --shadow-lg:0 20px 48px rgba(10,5,30,.42);
+    --r-lg:24px; --r-md:20px; --r-sm:16px;
+    --disp:"Cinzel",Georgia,serif;
+    --hero-disp:"Cinzel Decorative","Cinzel",Georgia,serif;
+    --body:"Nunito",system-ui,sans-serif;
+
+    /* pantheon chapter accents */
+    --c-hermes:#38C6D9;
+    --c-athena:#3A5FE0;
+    --c-poseidon:#159C86;
+    --c-ares:#C23B4B;
+    --c-zeus:#FFD84D;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--body);
+    min-height:100dvh;
+    display:grid;place-items:center;
+    padding:24px 12px;
+    color:var(--ink);
+    background:
+      radial-gradient(70% 40% at 50% 100%, rgba(255,255,255,.05), transparent 60%),
+      linear-gradient(180deg,#0B0620 0%, #1A0F3D 42%, #3A1F72 78%, #5B3AA0 100%);
+  }
+
+  /* ---------- phone frame ---------- */
+  .phone{
+    position:relative;
+    width:100%;max-width:412px;
+    height:min(860px,94dvh);
+    border-radius:44px;
+    padding:12px;
+    background:linear-gradient(160deg,#2b1c0e,#1a1206);
+    box-shadow:0 40px 80px rgba(0,0,0,.5), inset 0 0 0 2px rgba(255,201,60,.14);
+  }
+  .screen{
+    position:relative;height:100%;overflow:hidden;
+    border-radius:34px;display:flex;flex-direction:column;
+    background:#E9E2D0;
+  }
+
+  /* ---------- temple crown ---------- */
+  .scroll{
+    flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;position:relative;z-index:1;
+    padding:10px 0 108px;
+    scrollbar-width:none;
+    scroll-behavior:smooth;
+  }
+  .scroll::-webkit-scrollbar{display:none}
+  .pad{padding-left:16px;padding-right:16px}
+
+  .rise{opacity:0;transform:translateY(16px);animation:rise .6s cubic-bezier(.2,.7,.3,1) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+
+  /* ---------- marble card base ---------- */
+  .marble-card{
+    background:
+      radial-gradient(130% 200% at 8% -30%, rgba(255,255,255,.85), transparent 55%),
+      radial-gradient(160% 160% at 92% 130%, rgba(190,178,148,.45), transparent 60%),
+      linear-gradient(160deg,#FBF7EC 0%, #EFE7D2 60%, #E4D9BE 100%);
+    border:1px solid rgba(255,255,255,.6);
+    box-shadow:var(--shadow-sm), inset 0 0 0 1px rgba(199,154,46,.25);
+  }
+
+  /* ---------- top bar ---------- */
+  .topbar{display:flex;align-items:center;gap:10px}
+  .iconbtn{
+    flex:0 0 auto;width:38px;height:38px;border-radius:50%;border:none;cursor:pointer;
+    display:grid;place-items:center;font-size:16px;color:var(--bronze-dk);
+  }
+  .toptitle{flex:1;min-width:0}
+  .toptitle b{display:block;font-family:var(--disp);font-weight:700;font-size:18px;line-height:1.15;
+    color:#fff;letter-spacing:.4px;text-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .toptitle span{font-size:9.5px;font-weight:800;color:var(--gold-lt);letter-spacing:1.2px}
+  .coinpill{
+    flex:0 0 auto;display:flex;align-items:center;gap:5px;
+    background:linear-gradient(135deg,var(--gold-lt),var(--gold) 60%,var(--gold-dp));color:var(--bronze-dk);
+    padding:7px 12px;border-radius:999px;box-shadow:var(--shadow-sm);
+    font-family:var(--disp);font-weight:700;font-size:13px;
+    border:1px solid rgba(255,255,255,.5);
+  }
+
+  /* ---------- hearts bar ---------- */
+  .heartsbar{
+    margin-top:12px;display:flex;align-items:center;gap:10px;
+    border-radius:999px;padding:8px 10px 8px 16px;
+  }
+  .hearts{display:flex;gap:3px;flex:1}
+  .hearts span{font-size:17px;filter:drop-shadow(0 2px 3px rgba(160,20,40,.25))}
+  .hearts span.off{opacity:.28;filter:none}
+  .refill{
+    flex:0 0 auto;border:none;cursor:pointer;width:30px;height:30px;border-radius:50%;
+    background:linear-gradient(135deg,var(--gold-lt),var(--gold-dp));color:var(--bronze-dk);font-weight:900;font-size:16px;
+    display:grid;place-items:center;box-shadow:0 4px 10px rgba(150,100,10,.4);
+    animation:pulseplus 2.4s ease-in-out infinite;
+  }
+  @keyframes pulseplus{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+
+  /* ---------- leaderboard teaser ---------- */
+  .board{
+    margin-top:10px;border-radius:var(--r-md);cursor:pointer;overflow:hidden;
+    background:linear-gradient(120deg,#3A1D6E,#7A3FA0 55%,var(--gold-dp) 130%);
+    color:#fff;padding:13px 14px;display:flex;align-items:center;gap:11px;box-shadow:var(--shadow-md);
+    border:1px solid rgba(255,201,60,.35);
+  }
+  .board .big{font-size:26px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))}
+  .board .t{font-family:var(--disp);font-weight:700;font-size:13.5px}
+  .board .s{font-size:10px;font-weight:700;opacity:.85;margin-top:2px}
+  .board .go{margin-left:auto;font-size:18px;opacity:.85;color:var(--gold-lt)}
+
+  /* ---------- chapter plaque ---------- */
+  .chapchip{
+    position:absolute;left:50%;transform:translateX(-50%);
+    display:flex;flex-direction:column;align-items:center;gap:1px;white-space:nowrap;
+    z-index:3;padding:7px 16px 8px;border-radius:10px;
+    background:linear-gradient(160deg,#B98A3E,#6E4A1C);
+    box-shadow:var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,.25);
+    border:1px solid rgba(255,220,150,.3);
+  }
+  .chapchip .cname{display:flex;align-items:center;gap:6px;font-family:var(--disp);font-weight:700;
+    font-size:12px;color:var(--gold-lt);letter-spacing:.5px;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+  .chapchip .cname iconify-icon,.chapchip .cname .emo{font-size:15px}
+  .chapchip em{font-style:normal;font-size:8.5px;font-weight:700;color:rgba(255,255,255,.75);letter-spacing:1px}
+  .chapchip::after{
+    content:"";position:absolute;left:14px;right:14px;bottom:-3px;height:2px;border-radius:2px;
+    background:var(--accent,var(--gold));
+  }
+
+  /* ---------- map ---------- */
+  .mapwrap{position:relative;margin-top:8px}
+  .mapwrap svg{position:absolute;left:0;top:0;overflow:visible;z-index:2}
+
+  .bgband{position:absolute;left:0;width:100%;z-index:0;display:block;pointer-events:none;object-fit:cover}
+  .bgvignette{position:absolute;left:0;top:0;width:100%;z-index:1;pointer-events:none}
+
+  .node{position:absolute;transform:translate(-50%,-50%);z-index:2}
+
+  /* cast shadow floating on the clouds beneath each islet */
+  .node::after{
+    content:"";position:absolute;left:50%;top:100%;width:64%;height:12px;
+    transform:translate(-50%,-8px);border-radius:50%;
+    background:radial-gradient(ellipse, rgba(10,8,25,.4) 0%, rgba(10,8,25,0) 72%);
+    filter:blur(1.5px);z-index:-1;pointer-events:none;
+  }
+
+  /* islet base: an irregular rocky platform, lit top-left, mossy at the waterline */
+  .nodebtn{
+    position:relative;border:none;cursor:pointer;
+    width:56px;height:56px;display:grid;place-items:center;
+    font-family:var(--disp);font-weight:700;font-size:18px;
+    border-radius:47% 53% 44% 56%/56% 44% 58% 42%;
+    background:
+      radial-gradient(circle at 68% 78%, rgba(0,0,0,.22) 0%, transparent 42%),
+      radial-gradient(circle at 32% 26%, var(--isle-lt) 0%, var(--isle-mid) 55%, var(--isle-dk) 100%);
+    box-shadow:
+      var(--shadow-sm),
+      inset 0 3px 4px rgba(255,255,255,.45),
+      inset 0 -9px 10px -3px var(--isle-moss);
+    transition:transform .12s ease;
+  }
+  .node.shape-b .nodebtn{border-radius:53% 47% 57% 43%/45% 55% 42% 58%}
+  .node.shape-c .nodebtn{border-radius:44% 56% 49% 51%/58% 42% 53% 47%}
+  .nodebtn:active{transform:scale(.92)}
+  .micon{width:26px;height:26px;display:block;position:relative;z-index:1}
+
+  .node.locked{--isle-lt:#D6CFB8;--isle-mid:#B3AB92;--isle-dk:#847A62;--isle-moss:rgba(0,0,0,0)}
+  .node.locked .nodebtn{color:#5B5648}
+
+  .node.done{--isle-lt:#FFEFB0;--isle-mid:#FFC93C;--isle-dk:#B8860B;--isle-moss:rgba(74,150,86,.4)}
+  .node.done .nodebtn{color:var(--bronze-dk)}
+
+  .node.current .nodebtn{
+    width:66px;height:66px;border-radius:50%;
+    background:conic-gradient(from 200deg,var(--gold-lt),var(--gold),var(--gold-dp),var(--gold-lt));
+    box-shadow:var(--shadow-md);
+    padding:3px;
+  }
+  .node.current .nodebtn b{
+    display:grid;place-items:center;width:100%;height:100%;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#5a3a14,#2b1a08);
+    font-family:var(--disp);font-weight:700;font-size:18px;color:var(--gold-lt);
+    text-shadow:0 1px 3px rgba(0,0,0,.6);
+  }
+  .node.current .ring{
+    position:absolute;inset:-10px;border-radius:50%;
+    box-shadow:0 0 0 3px rgba(255,201,60,.55);
+    animation:ringpulse 2.2s ease-in-out infinite;
+    pointer-events:none;
+  }
+  @keyframes ringpulse{0%,100%{opacity:.35;transform:scale(.94)}50%{opacity:.85;transform:scale(1.12)}}
+  .playchip{
+    position:absolute;left:50%;top:-38px;transform:translateX(-50%);
+    background:var(--marble);color:var(--bronze-dk);font-family:var(--disp);font-weight:700;font-size:10.5px;
+    padding:5px 13px;border-radius:999px;box-shadow:var(--shadow-sm);white-space:nowrap;
+    border:1px solid var(--gold-dp);letter-spacing:.4px;
+    animation:bobchip 1.8s ease-in-out infinite;
+  }
+  @keyframes bobchip{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-5px)}}
+
+  .node.reward .nodebtn{
+    width:70px;height:70px;
+    --isle-lt:#FFF6D0;--isle-mid:#FFD65B;--isle-dk:#B8860B;--isle-moss:rgba(74,150,86,.32);
+    box-shadow:
+      var(--shadow-md), 0 0 0 4px rgba(255,201,60,.22),
+      inset 0 3px 4px rgba(255,255,255,.5), inset 0 -9px 10px -3px var(--isle-moss);
+  }
+  .node.reward .micon{width:32px;height:32px;color:var(--bronze-dk)}
+  .node.reward.locked .nodebtn{
+    --isle-lt:#D6CFB8;--isle-mid:#B3AB92;--isle-dk:#847A62;--isle-moss:rgba(0,0,0,0);
+    box-shadow:var(--shadow-sm), inset 0 3px 4px rgba(255,255,255,.35);
+  }
+  .node.reward.locked .micon{color:#5B5648;opacity:.8}
+  .node.locked .micon{color:#5B5648}
+
+  .mascotwrap{position:absolute;z-index:4;pointer-events:none}
+  .mascotwrap img{
+    height:92px;width:auto;filter:drop-shadow(0 12px 14px rgba(18,22,72,.30));
+    animation:mfloat 4.2s ease-in-out infinite;
+  }
+  @keyframes mfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+
+  /* ---------- bottom nav ---------- */
+  .nav{
+    position:absolute;left:12px;right:12px;bottom:12px;height:70px;
+    background:linear-gradient(160deg,rgba(42,26,10,.9),rgba(20,12,4,.92));
+    border-radius:26px;display:flex;align-items:center;justify-content:space-around;
+    box-shadow:0 14px 34px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,201,60,.18);z-index:5
+  }
+  .nb{background:none;border:none;cursor:pointer;color:rgba(255,232,190,.55);
+    font-family:var(--body);font-weight:800;font-size:9px;letter-spacing:.3px;
+    display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 10px;
+    border-radius:16px;transition:color .2s ease;position:relative}
+  .nb .ni{font-size:20px;transition:transform .2s ease}
+  .nb.on{color:#fff}
+  .nb.on .ni{transform:translateY(-1px);filter:drop-shadow(0 0 10px var(--gold)) drop-shadow(0 0 4px var(--gold))}
+  .nb.on::after{content:"";position:absolute;bottom:9px;width:5px;height:5px;border-radius:50%;
+    background:var(--gold);box-shadow:0 0 8px var(--gold)}
+
+  /* ---------- toast ---------- */
+  .toast{
+    position:absolute;left:50%;bottom:96px;transform:translate(-50%,20px);
+    background:rgba(20,12,4,.95);color:#fff;font-weight:800;font-size:13px;
+    padding:11px 18px;border-radius:14px;opacity:0;pointer-events:none;z-index:30;
+    box-shadow:var(--shadow-md);transition:transform .3s ease,opacity .3s ease;white-space:nowrap;
+    max-width:80%;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(255,201,60,.3)}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  /* ---------- modals ---------- */
+  .overlay{
+    position:absolute;inset:0;z-index:40;display:flex;align-items:flex-end;justify-content:center;
+    background:rgba(8,4,20,.6);opacity:0;pointer-events:none;transition:opacity .25s ease;
+    border-radius:34px;
+  }
+  .overlay.open{opacity:1;pointer-events:auto}
+  .card{
+    width:100%;
+    background:
+      radial-gradient(130% 200% at 8% -10%, rgba(255,255,255,.9), transparent 55%),
+      linear-gradient(180deg,#FBF7EC,#EFE7D2 70%,#E4D9BE);
+    border-radius:28px 28px 0 0;padding:26px 22px 22px;text-align:center;
+    transform:translateY(24px);transition:transform .3s cubic-bezier(.2,.8,.2,1);
+    box-shadow:0 -20px 50px rgba(0,0,0,.45);
+    border-top:2px solid var(--gold-dp);position:relative;
+  }
+  .overlay.open .card{transform:none}
+  .card img.cmascot{height:120px;margin:0 auto 6px;display:block;filter:drop-shadow(0 14px 16px rgba(18,22,72,.25))}
+  .card h3{font-family:var(--disp);font-weight:700;font-size:19px;color:var(--ink);margin-bottom:4px}
+  .card p{font-size:13px;font-weight:700;color:var(--ink-soft);margin-bottom:16px}
+  .card .close{
+    position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:none;
+    background:rgba(36,27,58,.08);color:var(--ink-soft);font-size:14px;cursor:pointer;
+  }
+  .primary{
+    width:100%;border:none;cursor:pointer;font-family:var(--disp);font-weight:700;font-size:16px;color:var(--bronze-dk);
+    padding:15px;border-radius:var(--r-md);margin-bottom:9px;letter-spacing:.3px;
+    background:linear-gradient(135deg,var(--gold-lt),var(--gold) 55%,var(--gold-dp));box-shadow:var(--shadow-md);
+  }
+  .store-opt{
+    display:flex;align-items:center;gap:11px;width:100%;border:1px solid rgba(199,154,46,.35);
+    background:#fff;border-radius:16px;padding:12px 14px;margin-bottom:9px;cursor:pointer;text-align:left;
+    box-shadow:var(--shadow-sm);
+  }
+  .store-opt .ic{font-size:22px}
+  .store-opt .lb{flex:1}
+  .store-opt .lb b{display:block;font-family:var(--disp);font-size:13.5px;color:var(--ink)}
+  .store-opt .lb small{font-size:10.5px;font-weight:800;color:var(--ink-soft)}
+  .store-opt .pr{font-family:var(--disp);font-weight:700;font-size:13.5px;color:var(--gold-dp)}
+
+  .lb-list{max-height:260px;overflow-y:auto;margin:2px 0 14px;text-align:left}
+  .lb-row{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(36,27,58,.08)}
+  .lb-rank{width:22px;text-align:center;font-family:var(--disp);font-weight:700;font-size:13px;color:var(--ink-soft)}
+  .lb-rank.g1{color:#B8860B}.lb-rank.g2{color:#8A93A6}.lb-rank.g3{color:#B5691E}
+  .lb-av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:#fff;
+    font-family:var(--disp);font-weight:700;font-size:13px;flex:0 0 auto}
+  .lb-name{flex:1;font-weight:800;font-size:12.5px;color:var(--ink)}
+  .lb-score{font-size:10.5px;font-weight:800;color:var(--ink-soft)}
+  .lb-prize{font-family:var(--disp);font-weight:700;font-size:12.5px;color:var(--green)}
+  .lb-you{background:rgba(199,154,46,.14);border-radius:14px;margin-top:6px;padding:10px 12px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none!important;transition:none!important}
+    .rise{opacity:1;transform:none}
+  }
+</style>
+
+<!-- hand-crafted icon set: reliable, no network dependency for high-repeat node icons -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-laurel" viewBox="0 0 100 100">
+      <g fill="currentColor">
+        <ellipse cx="30" cy="82" rx="7" ry="13" transform="rotate(20 30 82)"/>
+        <ellipse cx="24" cy="68" rx="7" ry="13" transform="rotate(5 24 68)"/>
+        <ellipse cx="22" cy="53" rx="7" ry="13" transform="rotate(-10 22 53)"/>
+        <ellipse cx="26" cy="38" rx="7" ry="13" transform="rotate(-25 26 38)"/>
+        <ellipse cx="34" cy="26" rx="7" ry="13" transform="rotate(-40 34 26)"/>
+        <ellipse cx="70" cy="82" rx="7" ry="13" transform="rotate(-20 70 82)"/>
+        <ellipse cx="76" cy="68" rx="7" ry="13" transform="rotate(-5 76 68)"/>
+        <ellipse cx="78" cy="53" rx="7" ry="13" transform="rotate(10 78 53)"/>
+        <ellipse cx="74" cy="38" rx="7" ry="13" transform="rotate(25 74 38)"/>
+        <ellipse cx="66" cy="26" rx="7" ry="13" transform="rotate(40 66 26)"/>
+      </g>
+    </symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24">
+      <path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm0 2a3 3 0 0 1 3 3v3H9V7a3 3 0 0 1 3-3z"/>
+    </symbol>
+    <symbol id="i-chest" viewBox="0 0 24 24">
+      <path fill="currentColor" d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2H4V8z"/>
+      <path fill="currentColor" d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z" opacity=".92"/>
+      <circle cx="12" cy="14.7" r="1.6" fill="#4A2E06"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="phone" role="application" aria-label="Quiz Master Pantheon Path solo mode">
+  <div class="screen">
+
+    <div class="scroll" id="scroll">
+
+      <!-- TOP BAR -->
+      <header class="topbar pad rise" style="animation-delay:.02s">
+        <button class="iconbtn marble-card" id="backBtn" aria-label="Back">←</button>
+        <div class="toptitle">
+          <b>Pantheon Path</b>
+          <span>SOLO MODE • L LEVELS</span>
+        </div>
+        <div class="coinpill"><span>🪙</span>240</div>
+      </header>
+
+      <!-- HEARTS -->
+      <div class="heartsbar marble-card pad rise" style="animation-delay:.08s">
+        <div class="hearts" id="hearts">
+          <span>❤️</span><span>❤️</span><span>❤️</span><span class="off">🤍</span><span class="off">🤍</span>
+        </div>
+        <button class="refill" id="refillBtn" aria-label="Get more hearts">+</button>
+      </div>
+
+      <!-- WEEKLY LEADERBOARD TEASER -->
+      <div class="board pad rise" id="boardBtn" style="animation-delay:.14s">
+        <div class="big">🏆</div>
+        <div>
+          <div class="t">Weekly Pantheon Prize</div>
+          <div class="s">Top 10 players get paid • Ends in 3d 14h</div>
+        </div>
+        <div class="go">›</div>
+      </div>
+
+      <!-- MAP -->
+      <div class="mapwrap pad rise" id="mapwrap" style="animation-delay:.2s">
+        <!-- svg + nodes injected by script -->
+      </div>
+
+    </div><!-- /scroll -->
+
+    <!-- BOTTOM NAV -->
+    <nav class="nav" aria-label="Bottom navigation">
+      <button class="nb" data-t="Home"><span class="ni">🏠</span>Home</button>
+      <button class="nb on" data-t="Play"><span class="ni">🎮</span>Play</button>
+      <button class="nb" data-t="Ranking"><span class="ni">🏆</span>Ranking</button>
+      <button class="nb" data-t="Rewards"><span class="ni">🎁</span>Rewards</button>
+      <button class="nb" data-t="Profile"><span class="ni">👤</span>Profile</button>
+    </nav>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- CHEST / REWARD MODAL -->
+    <div class="overlay" id="chestModal">
+      <div class="card">
+        <button class="close" data-close="chestModal">✕</button>
+        <img class="cmascot" src="export_1024/mascot_jackpot.png" alt="">
+        <h3 id="chestTitle">Shrine Cleared!</h3>
+        <p id="chestBody">You've earned a cash bonus for reaching this shrine.</p>
+        <button class="primary" id="claimBtn" data-close="chestModal">Claim Reward</button>
+      </div>
+    </div>
+
+    <!-- HEARTS / PAYWALL MODAL -->
+    <div class="overlay" id="heartsModal">
+      <div class="card">
+        <button class="close" data-close="heartsModal">✕</button>
+        <img class="cmascot" src="export_1024/mascot_time_running_out.png" alt="">
+        <h3>Out of Hearts</h3>
+        <p>Refill to keep climbing the Pantheon Path.</p>
+        <div class="store-opt" id="watchAdOpt">
+          <div class="ic">📺</div>
+          <div class="lb"><b>Watch an ad</b><small>+1 heart, instantly</small></div>
+          <div class="pr">Free</div>
+        </div>
+        <div class="store-opt" id="buyHeartsOpt">
+          <div class="ic">❤️</div>
+          <div class="lb"><b>Refill 5 hearts</b><small>Back to full strength</small></div>
+          <div class="pr">$0.99</div>
+        </div>
+        <div class="store-opt" id="unlimitedOpt">
+          <div class="ic">♾️</div>
+          <div class="lb"><b>Unlimited hearts</b><small>For 7 days</small></div>
+          <div class="pr">$2.99</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LEADERBOARD MODAL -->
+    <div class="overlay" id="boardModal">
+      <div class="card">
+        <button class="close" data-close="boardModal">✕</button>
+        <h3>Weekly Pantheon Prize</h3>
+        <p>Top 10 players share $250 • Resets in 3d 14h</p>
+        <div class="lb-list" id="lbList"></div>
+        <div class="lb-row lb-you">
+          <div class="lb-rank">47</div>
+          <div class="lb-av" style="background:linear-gradient(135deg,var(--gold-lt),var(--gold-dp))">A</div>
+          <div class="lb-name">You</div>
+          <div class="lb-score">1,240 pts</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const screen = document.querySelector('.screen');
+  const toastEl = document.getElementById('toast');
+  let tTimer;
+  function say(msg){
+    toastEl.textContent = msg; toastEl.classList.add('show');
+    clearTimeout(tTimer); tTimer = setTimeout(()=>toastEl.classList.remove('show'),1800);
+  }
+  function openModal(id){ document.getElementById(id).classList.add('open'); }
+  function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+  document.querySelectorAll('[data-close]').forEach(b=>{
+    b.addEventListener('click', ()=>closeModal(b.dataset.close));
+  });
+
+  function fireGoldConfetti(){
+    if(typeof confetti !== 'function') return;
+    confetti({
+      particleCount:70, spread:65, startVelocity:32, gravity:1.1, scalar:.9,
+      origin:{ y:.35 }, colors:['#FFE79A','#FFC93C','#C79A2E','#ffffff']
+    });
+  }
+
+  document.getElementById('backBtn').addEventListener('click', ()=>say('Back to Home'));
+  document.getElementById('refillBtn').addEventListener('click', ()=>openModal('heartsModal'));
+  document.getElementById('boardBtn').addEventListener('click', ()=>openModal('boardModal'));
+  document.getElementById('watchAdOpt').addEventListener('click', ()=>{ closeModal('heartsModal'); say('▶️ Playing ad… +1 heart!'); });
+  document.getElementById('buyHeartsOpt').addEventListener('click', ()=>{ closeModal('heartsModal'); say('💳 Purchase flow: Refill 5 hearts — $0.99'); });
+  document.getElementById('unlimitedOpt').addEventListener('click', ()=>{ closeModal('heartsModal'); say('💳 Purchase flow: Unlimited hearts — $2.99'); });
+  document.getElementById('claimBtn').addEventListener('click', fireGoldConfetti);
+
+  document.querySelectorAll('.nb').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.nb').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); say(b.dataset.t);
+  }));
+
+  // ---------------- roman numerals ----------------
+  function toRoman(num){
+    const map = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+    let res = '';
+    for(const [v,s] of map){ while(num>=v){ res+=s; num-=v; } }
+    return res;
+  }
+
+  // ---------------- Pantheon chapters ----------------
+  const CHAPTERS = [
+    {name:"Hermes' Trailhead",   icon:'🪽', iconify:null,           color:'var(--c-hermes)',   from:1,  to:10},
+    {name:"Athena's Archive",    icon:null, iconify:'mdi:owl',      color:'var(--c-athena)',   from:11, to:20},
+    {name:"Poseidon's Depths",   icon:'🔱', iconify:null,           color:'var(--c-poseidon)', from:21, to:30},
+    {name:"Ares' Arena",         icon:null, iconify:'mdi:sword-cross', color:'var(--c-ares)',  from:31, to:40},
+    {name:"Zeus' Summit",        icon:null, iconify:'mdi:flash',    color:'var(--c-zeus)',     from:41, to:50},
+  ];
+  function chapterFor(n){ return CHAPTERS.find(c => n>=c.from && n<=c.to); }
+
+  const TOTAL_LEVELS = 50;
+  const CURRENT_LEVEL = 13; // 1..12 done, 13 current, 14+ locked
+
+  const levels = [];
+  for(let n=1;n<=TOTAL_LEVELS;n++){
+    let state = n < CURRENT_LEVEL ? 'done' : (n === CURRENT_LEVEL ? 'current' : 'locked');
+    levels.push({ n, isReward: n % 10 === 0, state });
+  }
+
+  // ---------------- layout + render ----------------
+  const SPACING_Y = 98;
+  const TOP_PAD = 46;
+  const AMPLITUDE = 88;
+  const CENTER_X = 150; // half of ~300px usable width
+
+  const mapwrap = document.getElementById('mapwrap');
+  mapwrap.style.position = 'relative';
+  const MAP_H = TOP_PAD + (TOTAL_LEVELS-1)*SPACING_Y + 80;
+  mapwrap.style.height = MAP_H + 'px';
+
+  // climbing scenery: one scene per god chapter so every level has art behind it —
+  // only 3 source images exist, so two are reused, spaced apart so no two adjacent
+  // chapters repeat the same scene: sky, ground, sky, islands, ground (top to bottom)
+  const N_BANDS = CHAPTERS.length;
+  const BAND_H = MAP_H / N_BANDS;
+  const OVERLAP = 170;
+  const HEADER_EXT = mapwrap.offsetTop; // stretch the top scene up behind the header so it isn't a flat fill
+  const scrollEl = document.getElementById('scroll');
+  const BAND_SRC = [
+    'parallax-backgrounds/web/sky-clouds-backdrop.webp',      // Zeus' Summit
+    'parallax-backgrounds/web/trailhead-gate-ground.webp',    // Ares' Arena
+    'parallax-backgrounds/web/sky-clouds-backdrop.webp',      // Poseidon's Depths
+    'parallax-backgrounds/web/floating-temple-islands.webp',  // Athena's Archive
+    'parallax-backgrounds/web/trailhead-gate-ground.webp',    // Hermes' Trailhead
+  ];
+  const bgFrag = document.createDocumentFragment();
+  for(let j=0;j<N_BANDS;j++){
+    const fadeTop = j>0, fadeBottom = j<N_BANDS-1;
+    const top = j===0 ? -HEADER_EXT : Math.max(0, j*BAND_H - OVERLAP);
+    const bottom = Math.min(MAP_H, (j+1)*BAND_H + (fadeBottom?OVERLAP:0));
+    const h = bottom - top;
+    const img = document.createElement('img');
+    img.className = 'bgband';
+    img.src = BAND_SRC[j];
+    img.alt = '';
+    img.style.height = h + 'px';
+    let mask;
+    if(fadeTop && fadeBottom){
+      mask = `linear-gradient(to bottom, transparent 0, black ${OVERLAP}px, black ${h-OVERLAP}px, transparent 100%)`;
+    } else if(fadeBottom){
+      mask = `linear-gradient(to bottom, black 0, black ${h-OVERLAP}px, transparent 100%)`;
+    } else if(fadeTop){
+      mask = `linear-gradient(to bottom, transparent 0, black ${OVERLAP}px, black 100%)`;
+    } else {
+      mask = 'none';
+    }
+    img.style.webkitMaskImage = mask;
+    img.style.maskImage = mask;
+    // inserted into .scroll (not mapwrap) and positioned in its coordinate space, so the
+    // topmost scene can extend up behind the header instead of painting over it
+    img.style.top = (top + HEADER_EXT) + 'px';
+    bgFrag.appendChild(img);
+  }
+  scrollEl.insertBefore(bgFrag, scrollEl.firstChild);
+
+  const vignette = document.createElement('div');
+  vignette.className = 'bgvignette';
+  vignette.style.height = MAP_H + 'px';
+  vignette.style.background =
+    `radial-gradient(ellipse 220px 100% at ${CENTER_X}px 50%, rgba(10,8,25,0) 40%, rgba(10,8,25,.22) 100%)`;
+  mapwrap.appendChild(vignette);
+
+  // level 1 starts at the bottom, climbing up toward Zeus' Summit at the top
+  const pts = levels.map((lvl,i)=>({
+    x: CENTER_X + Math.sin(i*0.62)*AMPLITUDE,
+    y: TOP_PAD + (TOTAL_LEVELS-1-i)*SPACING_Y,
+  }));
+
+  // SVG sacred road: cream-marble casing + single gold dashed line throughout
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS,'svg');
+  svg.setAttribute('width','300');
+  svg.setAttribute('height', mapwrap.style.height);
+  svg.style.left = '50%';
+  svg.style.transform = 'translateX(-150px)';
+  mapwrap.appendChild(svg);
+
+  function pathD(from,to){
+    let d = `M ${pts[from].x} ${pts[from].y}`;
+    for(let i=from+1;i<=to;i++){
+      const midX=(pts[i-1].x+pts[i].x)/2, midY=(pts[i-1].y+pts[i].y)/2;
+      d += ` Q ${pts[i-1].x} ${pts[i-1].y} ${midX} ${midY}`;
+      if(i===to) d += ` L ${pts[i].x} ${pts[i].y}`;
+    }
+    return d;
+  }
+
+  const fullPath = pathD(0, pts.length-1);
+  const casing = document.createElementNS(svgNS,'path');
+  casing.setAttribute('d', fullPath);
+  casing.setAttribute('fill','none');
+  casing.setAttribute('stroke','rgba(246,241,228,.5)');
+  casing.setAttribute('stroke-width','14');
+  casing.setAttribute('stroke-linecap','round');
+  svg.appendChild(casing);
+
+  const road = document.createElementNS(svgNS,'path');
+  road.setAttribute('d', fullPath);
+  road.setAttribute('fill','none');
+  road.style.stroke = 'var(--gold-dp)';
+  road.setAttribute('stroke-width','6');
+  road.setAttribute('stroke-linecap','round');
+  road.setAttribute('stroke-dasharray','2 14');
+  svg.appendChild(road);
+
+  // chapter plaques
+  CHAPTERS.forEach(ch=>{
+    const p = pts[ch.from-1];
+    const chip = document.createElement('div');
+    chip.className = 'chapchip';
+    chip.style.top = (p.y - 40) + 'px';
+    chip.style.setProperty('--accent', ch.color);
+    const iconHtml = ch.iconify
+      ? `<iconify-icon icon="${ch.iconify}"></iconify-icon>`
+      : `<span class="emo">${ch.icon}</span>`;
+    chip.innerHTML = `<div class="cname">${iconHtml} ${ch.name}</div><em>${toRoman(ch.from)}–${toRoman(ch.to)}</em>`;
+    mapwrap.appendChild(chip);
+  });
+
+  // nodes
+  levels.forEach((lvl,i)=>{
+    const p = pts[i];
+    const node = document.createElement('div');
+    const shape = ['shape-a','shape-b','shape-c'][i % 3];
+    node.className = `node ${lvl.state}${lvl.isReward?' reward':''} ${shape}`;
+    node.style.left = p.x + 'px';
+    node.style.top = p.y + 'px';
+    node.dataset.n = lvl.n;
+
+    let inner;
+    if(lvl.state === 'current'){
+      inner = `
+        <div class="playchip">ENTER · LEVEL ${toRoman(lvl.n)}</div>
+        <div class="ring"></div>
+        <button class="nodebtn"><b>${toRoman(lvl.n)}</b></button>`;
+    } else if(lvl.isReward){
+      inner = `<button class="nodebtn"><svg class="micon"><use href="#i-chest"/></svg></button>`;
+    } else if(lvl.state === 'locked'){
+      inner = `<button class="nodebtn"><svg class="micon"><use href="#i-lock"/></svg></button>`;
+    } else {
+      inner = `<button class="nodebtn"><svg class="micon"><use href="#i-laurel"/></svg></button>`;
+    }
+    node.innerHTML = inner;
+    mapwrap.appendChild(node);
+
+    node.querySelector('.nodebtn').addEventListener('click', ()=>{
+      const ch = chapterFor(lvl.n);
+      if(lvl.state === 'locked'){
+        say(lvl.isReward ? `Reach Level ${toRoman(lvl.n)} to unlock this shrine 💰` : `🔒 Locked — clear Level ${toRoman(lvl.n-1)} first`);
+      } else if(lvl.state === 'current'){
+        say(`▶️ Entering Level ${toRoman(lvl.n)}…`);
+      } else if(lvl.isReward){
+        document.getElementById('chestTitle').textContent = `Level ${toRoman(lvl.n)} Shrine Cleared!`;
+        document.getElementById('chestBody').textContent = `+$1.00 bonus claimed at ${ch.name}.`;
+        openModal('chestModal');
+        fireGoldConfetti();
+      } else {
+        say(`Replay Level ${toRoman(lvl.n)}`);
+      }
+    });
+  });
+
+  // floating mascot near current level
+  const curIdx = CURRENT_LEVEL - 1;
+  const curP = pts[curIdx];
+  const mascotwrap = document.createElement('div');
+  mascotwrap.className = 'mascotwrap';
+  mascotwrap.style.left = (curP.x + 58) + 'px';
+  mascotwrap.style.top = (curP.y - 30) + 'px';
+  mascotwrap.innerHTML = `<img src="export_1024/mascot_idle.png" alt="">`;
+  mapwrap.appendChild(mascotwrap);
+
+  // scroll to current level on load
+  window.addEventListener('load', ()=>{
+    const scrollEl = document.getElementById('scroll');
+    setTimeout(()=>{
+      scrollEl.scrollTo({ top: Math.max(0, curP.y - 260), behavior:'smooth' });
+    }, 350);
+  });
+
+  // ---------------- leaderboard ----------------
+  const LB = [
+    {rank:1,name:'Maya',score:15420,prize:50},
+    {rank:2,name:'Jonas',score:14110,prize:40},
+    {rank:3,name:'Priya',score:13290,prize:30},
+    {rank:4,name:'Diego',score:12040,prize:20},
+    {rank:5,name:'Lena',score:11870,prize:20},
+    {rank:6,name:'Omar',score:11320,prize:15},
+    {rank:7,name:'Fatou',score:10980,prize:15},
+    {rank:8,name:'Théo',score:10510,prize:10},
+    {rank:9,name:'Nina',score:9870,prize:10},
+    {rank:10,name:'Kwame',score:9420,prize:10},
+  ];
+  const lbColors = ['#C79A2E','#8A5A22','#B7AE9A','#6E4A1C','#D9B25A'];
+  const lbList = document.getElementById('lbList');
+  LB.forEach((p,i)=>{
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+    const rankClass = p.rank===1?'g1':p.rank===2?'g2':p.rank===3?'g3':'';
+    row.innerHTML = `
+      <div class="lb-rank ${rankClass}">${p.rank}</div>
+      <div class="lb-av" style="background:${lbColors[i % lbColors.length]}">${p.name[0]}</div>
+      <div class="lb-name">${p.name}</div>
+      <div class="lb-score">${p.score.toLocaleString()} pts</div>
+      <div class="lb-prize">$${p.prize}</div>`;
+    lbList.appendChild(row);
+  });
+</script>

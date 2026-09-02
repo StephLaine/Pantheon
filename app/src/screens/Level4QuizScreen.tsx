@@ -1,0 +1,336 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import ConfettiCannon from 'react-native-confetti-cannon';
+
+import { colors, fonts, radii, shadow, toRoman } from '../theme';
+import { withAlpha } from '../utils/color';
+import { mascots } from '../assets';
+import {
+  WRONG_TAUNTS,
+  TIMEOUT_TAUNTS,
+  BETWEEN_TAUNTS,
+  WRONG_MASCOTS,
+  TIMEOUT_MASCOTS,
+  BETWEEN_MASCOTS,
+  BETWEEN_TAUNT_CHANCE,
+  pick,
+} from '../data/taunts';
+import { useMascotTaunt } from '../components/MascotTaunt';
+import { STORY } from '../data/story';
+import { playSfx, playMusic, stopMusic, playStinger, startTimerTick, stopTimerTick } from '../audio/sound';
+import { useGameStore } from '../state/game';
+
+const story = STORY[4];
+
+// mockup-only statement bank — frontend flow for Level 4 (Hermes' Trailhead,
+// "Vrai / Faux"): 6 true/false statements, tighter 12s timer. Faster and more
+// binary/nervous than levels 1-3 — it's priming the player for the level 6
+// speed wall, per kwizkach_gameplay_niveaux.md.
+const STATEMENTS = [
+  { text: 'Le soleil tourne autour de la Terre.', correct: false },
+  { text: 'Paris est la capitale de la France.', correct: true },
+  { text: 'Un triangle a quatre côtés.', correct: false },
+  { text: "L'eau bout à 100°C au niveau de la mer.", correct: true },
+  { text: 'Les araignées sont des insectes.', correct: false },
+  { text: 'Le cœur humain a quatre cavités.', correct: true },
+];
+
+const QUESTION_TIME = 12; // seconds — plus serré que les niveaux 1-3
+const START_HEARTS = 3;
+
+type Phase = 'question' | 'feedback' | 'complete';
+
+export default function Level4QuizScreen() {
+  const navigation = useNavigation();
+
+  const [showTutorial, setShowTutorial] = useState(true);
+  const [qIndex, setQIndex] = useState(0);
+  const [phase, setPhase] = useState<Phase>('question');
+  const [selected, setSelected] = useState<boolean | null>(null);
+  const hearts = useGameStore((s) => s.hearts);
+  const loseHeart = useGameStore((s) => s.loseHeart);
+  const completeLevel = useGameStore((s) => s.completeLevel);
+  const [correctCount, setCorrectCount] = useState(0);
+  const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
+
+  const timerAnim = useRef(new Animated.Value(1)).current;
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const confettiRef = useRef<ConfettiCannon>(null);
+
+  const statement = STATEMENTS[qIndex];
+  const isLast = qIndex === STATEMENTS.length - 1;
+
+  function startTimer() {
+    timerAnim.setValue(1);
+    Animated.timing(timerAnim, {
+      toValue: 0,
+      duration: QUESTION_TIME * 1000,
+      easing: Easing.linear,
+      useNativeDriver: false,
+    }).start();
+    timerRef.current = setTimeout(() => onTimeout(), QUESTION_TIME * 1000);
+    startTimerTick();
+  }
+
+  function clearTimer() {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerAnim.stopAnimation();
+    stopTimerTick();
+  }
+
+  useEffect(() => {
+    playMusic('routeSacree');
+    return stopMusic;
+  }, []);
+
+  useEffect(() => {
+    if (showTutorial) return;
+    startTimer();
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qIndex, showTutorial]);
+
+  function onTimeout() {
+    setSelected(null);
+    setPhase('feedback');
+    playSfx('timeout');
+    showTaunt(`${pick(TIMEOUT_TAUNTS)} · pas de cœur perdu`, pick(TIMEOUT_MASCOTS), 1200);
+    // Level 4: timeout still costs nothing, per the doc — only a wrong tap does
+    setTimeout(advance, 1200);
+  }
+
+  function onAnswer(choice: boolean) {
+    if (phase !== 'question') return;
+    clearTimer();
+    setSelected(choice);
+    setPhase('feedback');
+    playSfx('select');
+    const isCorrect = choice === statement.correct;
+    if (isCorrect) {
+      setCorrectCount((c) => c + 1);
+      playSfx('correct');
+      showTaunt('⚡ Bonne réponse !', mascots.correct, 800);
+      setTimeout(advance, 800);
+    } else {
+      loseHeart();
+      playSfx('wrong');
+      playSfx('heartLose');
+      showTaunt(`${pick(WRONG_TAUNTS)} · −1 ❤️`, pick(WRONG_MASCOTS), 1200);
+      setTimeout(advance, 1200);
+    }
+  }
+
+  function maybeShowBetweenTaunt() {
+    if (Math.random() >= BETWEEN_TAUNT_CHANCE) return;
+    showTaunt(pick(BETWEEN_TAUNTS), pick(BETWEEN_MASCOTS), 1800);
+  }
+
+  function advance() {
+    if (isLast) {
+      setPhase('complete');
+      completeLevel(4);
+      stopMusic();
+      playSfx('confetti');
+      playStinger('acte1');
+      confettiRef.current?.start();
+    } else {
+      setQIndex((i) => i + 1);
+      setSelected(null);
+      setPhase('question');
+      maybeShowBetweenTaunt();
+    }
+  }
+
+  function dismissTutorial() {
+    playSfx('tap');
+    setShowTutorial(false);
+  }
+
+  function goBack() {
+    playSfx('tap');
+    navigation.goBack();
+  }
+
+  const timerWidth = timerAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+
+  return (
+    <View style={styles.screen}>
+      <LinearGradient colors={[colors.skyTop, colors.skyMid, colors.skyBottom]} style={StyleSheet.absoluteFill} />
+
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        {phase !== 'complete' && (
+          <>
+            <View style={styles.topbar}>
+              <Pressable style={styles.backBtn} onPress={goBack} hitSlop={10}>
+                <Text style={styles.backTxt}>‹</Text>
+              </Pressable>
+              <View style={styles.topbarCenter}>
+                <Text style={styles.topbarTitle}>Niveau {toRoman(4)} · Vrai / Faux</Text>
+                <View style={styles.dots}>
+                  {STATEMENTS.map((_, i) => (
+                    <View key={i} style={[styles.dot, i < qIndex && styles.dotDone, i === qIndex && styles.dotCurrent]} />
+                  ))}
+                </View>
+              </View>
+              <View style={styles.heartsMini}>
+                {Array.from({ length: START_HEARTS }).map((_, i) => (
+                  <Text key={i} style={[styles.heartMini, i >= hearts && styles.heartMiniOff]}>
+                    ❤️
+                  </Text>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.timerTrack}>
+              <Animated.View style={[styles.timerFill, { width: timerWidth }]} />
+            </View>
+
+            <View style={styles.body}>
+              <View style={styles.card}>
+                <Text style={styles.prompt}>{statement.text}</Text>
+              </View>
+
+              <View style={styles.tfRow}>
+                {[true, false].map((val) => {
+                  const isSelected = selected === val;
+                  const isCorrectVal = val === statement.correct;
+                  const revealed = phase === 'feedback';
+                  const showCorrect = revealed && isCorrectVal;
+                  const showWrong = revealed && isSelected && !isCorrectVal;
+                  return (
+                    <Pressable
+                      key={String(val)}
+                      disabled={phase !== 'question'}
+                      onPress={() => onAnswer(val)}
+                      style={[styles.tfBtn, showCorrect && styles.choiceCorrect, showWrong && styles.choiceWrong]}
+                    >
+                      <Text style={styles.tfTxt}>{val ? '✅ VRAI' : '❌ FAUX'}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {tauntBubble}
+          </>
+        )}
+
+        {phase === 'complete' && (
+          <View style={styles.completeWrap}>
+            <Image source={mascots.cheering} style={styles.completeMascot} contentFit="contain" />
+            <Text style={styles.completeTitle}>Borne 4 franchie !</Text>
+            <Text style={styles.storyOutro}>{story.outro}</Text>
+            <Text style={styles.completeSub}>
+              {correctCount}/{STATEMENTS.length} bonnes réponses · {hearts} ❤️ restants
+            </Text>
+            <Pressable style={styles.completeBtn} onPress={goBack}>
+              <LinearGradient colors={[colors.goldLt, colors.gold, colors.goldDp]} style={StyleSheet.absoluteFill} />
+              <Text style={styles.completeBtnTxt}>Retour à la carte</Text>
+            </Pressable>
+          </View>
+        )}
+      </SafeAreaView>
+
+      {showTutorial && (
+        <View style={styles.tutorialOverlay}>
+          <View style={styles.tutorialCard}>
+            <Image source={mascots.determined} style={styles.tutorialMascot} contentFit="contain" />
+            <Text style={styles.tutorialTitle}>{story.title}</Text>
+            <Text style={styles.storyIntro}>{story.intro}</Text>
+            <Text style={styles.tutorialLine}>⚡ Réponds vite, le chrono est plus serré !</Text>
+            <Text style={styles.tutorialLine}>❌ Mauvaise réponse = −1 ❤️ · Temps écoulé = rien perdu</Text>
+            <Pressable style={styles.tutorialBtn} onPress={dismissTutorial}>
+              <Text style={styles.tutorialBtnTxt}>Compris !</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      <ConfettiCannon
+        ref={confettiRef}
+        count={80}
+        origin={{ x: 210, y: 0 }}
+        autoStart={false}
+        fadeOut
+        colors={[colors.goldLt, colors.gold, colors.goldDp, '#ffffff']}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  safe: { flex: 1 },
+
+  topbar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingTop: 6, gap: 10 },
+  backBtn: {
+    width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.22)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  backTxt: { color: '#fff', fontSize: 22, fontFamily: fonts.bodyBold, marginTop: -2 },
+  topbarCenter: { flex: 1, alignItems: 'center' },
+  topbarTitle: { fontFamily: fonts.dispSemi, fontSize: 13, color: '#fff' },
+  dots: { flexDirection: 'row', gap: 5, marginTop: 5 },
+  dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: 'rgba(255,255,255,0.35)' },
+  dotDone: { backgroundColor: colors.goldLt },
+  dotCurrent: { backgroundColor: '#fff' },
+  heartsMini: { flexDirection: 'row', gap: 2, width: 34 * 3 },
+  heartMini: { fontSize: 15 },
+  heartMiniOff: { opacity: 0.25 },
+
+  timerTrack: {
+    height: 6, marginHorizontal: 14, marginTop: 12, borderRadius: 3,
+    backgroundColor: 'rgba(0,0,0,0.18)', overflow: 'hidden',
+  },
+  timerFill: { height: '100%', backgroundColor: colors.cHermes, borderRadius: 3 },
+
+  body: { flex: 1, paddingHorizontal: 20, paddingTop: 30 },
+  card: {
+    backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: radii.lg, padding: 26,
+    minHeight: 140, alignItems: 'center', justifyContent: 'center', ...shadow.md,
+  },
+  prompt: { fontFamily: fonts.dispSemi, fontSize: 19, color: colors.ink, textAlign: 'center', lineHeight: 27 },
+
+  tfRow: { flexDirection: 'row', gap: 14, marginTop: 26 },
+  tfBtn: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: radii.lg, paddingVertical: 26,
+    borderWidth: 2, borderColor: 'transparent', ...shadow.sm,
+  },
+  tfTxt: { fontFamily: fonts.dispSemi, fontSize: 16, color: colors.ink },
+  choiceCorrect: { borderColor: colors.green, backgroundColor: withAlpha(colors.green, 0.16) },
+  choiceWrong: { borderColor: colors.red, backgroundColor: withAlpha(colors.red, 0.14) },
+
+  completeWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
+  completeMascot: { width: 160, height: 160 },
+  completeTitle: { fontFamily: fonts.disp, fontSize: 24, color: colors.ink, marginTop: 8, textAlign: 'center' },
+  completeSub: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.inkSoft, marginTop: 8, textAlign: 'center' },
+  storyOutro: { fontFamily: fonts.bodyBold, fontSize: 13, fontStyle: 'italic', color: colors.inkSoft, marginTop: 10, textAlign: 'center', lineHeight: 18 },
+  completeBtn: {
+    marginTop: 28, width: '100%', borderRadius: radii.md, paddingVertical: 16,
+    alignItems: 'center', overflow: 'hidden', ...shadow.md,
+  },
+  completeBtnTxt: { fontFamily: fonts.dispSemi, fontSize: 15, color: colors.bronzeDk },
+
+  tutorialOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(10,8,25,0.6)', alignItems: 'center', justifyContent: 'center', padding: 30,
+  },
+  tutorialCard: {
+    width: '100%', backgroundColor: colors.marble, borderRadius: radii.lg, padding: 24,
+    alignItems: 'center', ...shadow.lg,
+  },
+  tutorialMascot: { width: 90, height: 90 },
+  tutorialTitle: { fontFamily: fonts.disp, fontSize: 18, color: colors.bronzeDk, marginTop: 6 },
+  tutorialLine: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.ink, marginTop: 10, textAlign: 'center' },
+  storyIntro: { fontFamily: fonts.bodyBold, fontSize: 12.5, fontStyle: 'italic', color: colors.inkSoft, marginTop: 8, textAlign: 'center', lineHeight: 18 },
+  tutorialBtn: {
+    marginTop: 20, backgroundColor: colors.cHermes, borderRadius: radii.md,
+    paddingVertical: 13, paddingHorizontal: 34,
+  },
+  tutorialBtnTxt: { fontFamily: fonts.dispSemi, fontSize: 14, color: '#fff' },
+});
