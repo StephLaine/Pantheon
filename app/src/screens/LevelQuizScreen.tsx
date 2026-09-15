@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,40 +23,9 @@ import { STORY } from '../data/story';
 import { useMascotTaunt } from '../components/MascotTaunt';
 import { playSfx, playMusic, stopMusic, playStinger, startTimerTick, stopTimerTick } from '../audio/sound';
 import { useGameStore } from '../state/game';
+import { fetchFlatQuestions, QcmQuestion } from '../data/quizContent';
 
 const story = STORY[1];
-
-// mockup-only question bank — frontend flow for Level 1 (Hermes' Trailhead,
-// "La Première Borne"): 5 generic QCM, generous 20s timer, timeout costs
-// nothing. Per kwizkach_gameplay_niveaux.md this is the tutorial level, so
-// the flow favors slow, encouraging pacing over real difficulty.
-const QUESTIONS = [
-  {
-    prompt: 'Combien de côtés a un triangle ?',
-    choices: ['2', '3', '4', '5'],
-    correct: 1,
-  },
-  {
-    prompt: 'Quelle est la capitale de la France ?',
-    choices: ['Lyon', 'Marseille', 'Paris', 'Nice'],
-    correct: 2,
-  },
-  {
-    prompt: 'Quel est le plus grand océan du monde ?',
-    choices: ['Atlantique', 'Indien', 'Arctique', 'Pacifique'],
-    correct: 3,
-  },
-  {
-    prompt: 'Combien font 5 × 6 ?',
-    choices: ['25', '30', '35', '36'],
-    correct: 1,
-  },
-  {
-    prompt: "Quelle planète est surnommée la « planète rouge » ?",
-    choices: ['Vénus', 'Mars', 'Jupiter', 'Saturne'],
-    correct: 1,
-  },
-];
 
 const QUESTION_TIME = 20; // seconds — generous, per the doc
 const START_HEARTS = 3;
@@ -75,13 +44,38 @@ export default function LevelQuizScreen() {
   const completeLevel = useGameStore((s) => s.completeLevel);
   const [correctCount, setCorrectCount] = useState(0);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
+  const [questions, setQuestions] = useState<QcmQuestion[] | null>(null);
 
   const timerAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confettiRef = useRef<ConfettiCannon>(null);
 
-  const question = QUESTIONS[qIndex];
-  const isLast = qIndex === QUESTIONS.length - 1;
+  useEffect(() => {
+    fetchFlatQuestions(1).then(setQuestions).catch((e) => console.warn('fetch questions failed', e));
+  }, []);
+
+  useEffect(() => {
+    playMusic('routeSacree');
+    return stopMusic;
+  }, []);
+
+  useEffect(() => {
+    if (showTutorial || !questions) return;
+    startTimer();
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qIndex, showTutorial, questions]);
+
+  if (!questions) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  const question = questions[qIndex];
+  const isLast = qIndex === questions.length - 1;
 
   function startTimer() {
     timerAnim.setValue(1);
@@ -100,18 +94,6 @@ export default function LevelQuizScreen() {
     timerAnim.stopAnimation();
     stopTimerTick();
   }
-
-  useEffect(() => {
-    playMusic('routeSacree');
-    return stopMusic;
-  }, []);
-
-  useEffect(() => {
-    if (showTutorial) return;
-    startTimer();
-    return clearTimer;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qIndex, showTutorial]);
 
   function onTimeout() {
     setSelected(null);
@@ -135,11 +117,14 @@ export default function LevelQuizScreen() {
       showTaunt('⚡ Bonne réponse !', mascots.correct, 900);
       setTimeout(advance, 900);
     } else {
-      loseHeart();
+      const heartsLeft = loseHeart();
       playSfx('wrong');
       playSfx('heartLose');
       showTaunt(`${pick(WRONG_TAUNTS)} · −1 ❤️`, pick(WRONG_MASCOTS), 1300);
-      setTimeout(advance, 1300);
+      setTimeout(() => {
+        if (heartsLeft <= 0) (navigation as any).navigate('SoloMap', { openHeartsModal: true });
+        else advance();
+      }, 1300);
     }
   }
 
@@ -190,7 +175,7 @@ export default function LevelQuizScreen() {
               <View style={styles.topbarCenter}>
                 <Text style={styles.topbarTitle}>Niveau {toRoman(1)} · La Première Borne</Text>
                 <View style={styles.dots}>
-                  {QUESTIONS.map((_, i) => (
+                  {questions.map((_, i) => (
                     <View
                       key={i}
                       style={[
@@ -258,7 +243,7 @@ export default function LevelQuizScreen() {
             <Text style={styles.completeTitle}>Borne 1 franchie !</Text>
             <Text style={styles.storyOutro}>{story.outro}</Text>
             <Text style={styles.completeSub}>
-              {correctCount}/{QUESTIONS.length} bonnes réponses · {hearts} ❤️ restants
+              {correctCount}/{questions.length} bonnes réponses · {hearts} ❤️ restants
             </Text>
             <Pressable style={styles.completeBtn} onPress={goBack}>
               <LinearGradient colors={[colors.goldLt, colors.gold, colors.goldDp]} style={StyleSheet.absoluteFill} />

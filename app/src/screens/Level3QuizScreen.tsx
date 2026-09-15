@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,23 +23,12 @@ import { useMascotTaunt } from '../components/MascotTaunt';
 import { STORY } from '../data/story';
 import { playSfx, playMusic, stopMusic, playStinger, startTimerTick, stopTimerTick } from '../audio/sound';
 import { useGameStore } from '../state/game';
+import { fetchFlatQuestions, QcmQuestion } from '../data/quizContent';
 
 const story = STORY[3];
 
-// mockup-only question bank — frontend flow for Level 3 (Hermes' Trailhead,
-// "Le Messager"): 5 generic QCM, generous 20s timer, plus the skip button
-// (1 free use, then costs coins) taught here per kwizkach_gameplay_niveaux.md.
-const QUESTIONS = [
-  { prompt: 'Combien de continents y a-t-il sur Terre ?', choices: ['5', '6', '7', '8'], correct: 2 },
-  { prompt: 'Quelle est la monnaie utilisée en Haïti ?', choices: ['Le dollar', 'La gourde', "L'euro", 'Le peso'], correct: 1 },
-  { prompt: 'Combien de jours compte une année bissextile ?', choices: ['364', '365', '366', '367'], correct: 2 },
-  { prompt: 'Quel est le plus long fleuve du monde ?', choices: ['Le Nil', "L'Amazone", 'Le Yangzi', 'Le Mississippi'], correct: 0 },
-  { prompt: 'Combien de côtés a un hexagone ?', choices: ['5', '6', '7', '8'], correct: 1 },
-];
-
 const QUESTION_TIME = 20; // seconds — généreux, comme les niveaux 1 et 2
 const START_HEARTS = 3;
-const START_COINS = 240;
 const SKIP_COST = 20;
 
 type Phase = 'question' | 'feedback' | 'complete';
@@ -54,18 +43,44 @@ export default function Level3QuizScreen() {
   const hearts = useGameStore((s) => s.hearts);
   const loseHeart = useGameStore((s) => s.loseHeart);
   const completeLevel = useGameStore((s) => s.completeLevel);
-  const [coins, setCoins] = useState(START_COINS);
+  const coins = useGameStore((s) => s.coins);
+  const spendCoins = useGameStore((s) => s.spendCoins);
   const [correctCount, setCorrectCount] = useState(0);
   const [freeSkipUsed, setFreeSkipUsed] = useState(false);
   const [showSkipPaywall, setShowSkipPaywall] = useState(false);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
+  const [questions, setQuestions] = useState<QcmQuestion[] | null>(null);
 
   const timerAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confettiRef = useRef<ConfettiCannon>(null);
 
-  const question = QUESTIONS[qIndex];
-  const isLast = qIndex === QUESTIONS.length - 1;
+  useEffect(() => {
+    fetchFlatQuestions(3).then(setQuestions).catch((e) => console.warn('fetch questions failed', e));
+  }, []);
+
+  useEffect(() => {
+    playMusic('routeSacree');
+    return stopMusic;
+  }, []);
+
+  useEffect(() => {
+    if (showTutorial || !questions) return;
+    startTimer();
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qIndex, showTutorial, questions]);
+
+  if (!questions) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  const question = questions[qIndex];
+  const isLast = qIndex === questions.length - 1;
 
   function startTimer() {
     timerAnim.setValue(1);
@@ -84,18 +99,6 @@ export default function Level3QuizScreen() {
     timerAnim.stopAnimation();
     stopTimerTick();
   }
-
-  useEffect(() => {
-    playMusic('routeSacree');
-    return stopMusic;
-  }, []);
-
-  useEffect(() => {
-    if (showTutorial) return;
-    startTimer();
-    return clearTimer;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qIndex, showTutorial]);
 
   function onTimeout() {
     setSelected(null);
@@ -118,11 +121,14 @@ export default function Level3QuizScreen() {
       showTaunt('⚡ Bonne réponse !', mascots.correct, 900);
       setTimeout(advance, 900);
     } else {
-      loseHeart();
+      const heartsLeft = loseHeart();
       playSfx('wrong');
       playSfx('heartLose');
       showTaunt(`${pick(WRONG_TAUNTS)} · −1 ❤️`, pick(WRONG_MASCOTS), 1300);
-      setTimeout(advance, 1300);
+      setTimeout(() => {
+        if (heartsLeft <= 0) (navigation as any).navigate('SoloMap', { openHeartsModal: true });
+        else advance();
+      }, 1300);
     }
   }
 
@@ -142,6 +148,11 @@ export default function Level3QuizScreen() {
   }
 
   function payForSkip() {
+    if (coins < SKIP_COST) {
+      playSfx('wrong');
+      showTaunt('❌ Pas assez de pièces', mascots.winkThumbsUp, 900);
+      return;
+    }
     playSfx('tap');
     playSfx('coinsPay');
     performSkip(true);
@@ -151,7 +162,7 @@ export default function Level3QuizScreen() {
     clearTimer();
     setShowSkipPaywall(false);
     if (!freeSkipUsed) setFreeSkipUsed(true);
-    if (paid) setCoins((c) => Math.max(0, c - SKIP_COST));
+    if (paid) spendCoins(SKIP_COST, 'coin_spend_skip', 3);
     setSelected(null);
     setPhase('feedback');
     showTaunt(
@@ -209,7 +220,7 @@ export default function Level3QuizScreen() {
               <View style={styles.topbarCenter}>
                 <Text style={styles.topbarTitle}>Niveau {toRoman(3)} · Le Messager</Text>
                 <View style={styles.dots}>
-                  {QUESTIONS.map((_, i) => (
+                  {questions.map((_, i) => (
                     <View key={i} style={[styles.dot, i < qIndex && styles.dotDone, i === qIndex && styles.dotCurrent]} />
                   ))}
                 </View>
@@ -276,7 +287,7 @@ export default function Level3QuizScreen() {
             <Text style={styles.completeTitle}>Borne 3 franchie !</Text>
             <Text style={styles.storyOutro}>{story.outro}</Text>
             <Text style={styles.completeSub}>
-              {correctCount}/{QUESTIONS.length} bonnes réponses · {hearts} ❤️ restants · {coins} 🪙
+              {correctCount}/{questions.length} bonnes réponses · {hearts} ❤️ restants · {coins} 🪙
             </Text>
             <Pressable style={styles.completeBtn} onPress={goBack}>
               <LinearGradient colors={[colors.goldLt, colors.gold, colors.goldDp]} style={StyleSheet.absoluteFill} />
@@ -311,7 +322,11 @@ export default function Level3QuizScreen() {
               <Pressable style={styles.paywallCancel} onPress={cancelSkipPaywall}>
                 <Text style={styles.paywallCancelTxt}>Annuler</Text>
               </Pressable>
-              <Pressable style={styles.paywallPay} onPress={payForSkip}>
+              <Pressable
+                style={[styles.paywallPay, coins < SKIP_COST && { opacity: 0.4 }]}
+                onPress={payForSkip}
+                disabled={coins < SKIP_COST}
+              >
                 <Text style={styles.paywallPayTxt}>Payer 20 🪙</Text>
               </Pressable>
             </View>

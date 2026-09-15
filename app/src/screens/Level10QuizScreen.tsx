@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,26 +23,9 @@ import { useMascotTaunt } from '../components/MascotTaunt';
 import { STORY } from '../data/story';
 import { playSfx, playMusic, stopMusic, playStinger, startTimerTick, stopTimerTick } from '../audio/sound';
 import { useGameStore } from '../state/game';
+import { fetchMixedQuestions, Level10Question } from '../data/quizContent';
 
 const story = STORY[10];
-
-// mockup-only mixed question set — frontend flow for Level 10 (Hermes'
-// Trailhead finale, "Les Portes de l'Archive"): best-of recap of every format
-// seen in levels 1-9 (QCM, Vrai/Faux, a chain-flavored close), moderate
-// timer, low drain — "gratifiante", not a wall. Last question is the easy
-// Haitian-pride one, per kwizkach_gameplay_niveaux.md.
-type Question =
-  | { format: 'qcm'; prompt: string; choices: string[]; correct: number }
-  | { format: 'tf'; prompt: string; correct: boolean };
-
-const QUESTIONS: Question[] = [
-  { format: 'qcm', prompt: "Quelle est la capitale d'Haïti ?", choices: ['Cap-Haïtien', 'Port-au-Prince', 'Jacmel', 'Gonaïves'], correct: 1 },
-  { format: 'qcm', prompt: 'Combien de côtés un pentagone a-t-il ?', choices: ['4', '5', '6', '7'], correct: 1 },
-  { format: 'tf', prompt: "L'ADN se trouve dans le noyau de la cellule.", correct: true },
-  { format: 'tf', prompt: 'Le Brésil se trouve en Afrique.', correct: false },
-  { format: 'qcm', prompt: 'Quel est le plus grand pays du monde par superficie ?', choices: ['Chine', 'Canada', 'Russie', 'États-Unis'], correct: 2 },
-  { format: 'qcm', prompt: 'En quelle année Haïti a-t-il proclamé son indépendance ?', choices: ['1789', '1804', '1815', '1848'], correct: 1 },
-];
 
 const CHAIN_START = 4; // the last 2 questions wear the "chaîne finale" flavor, purely cosmetic
 const QUESTION_TIME = 15; // seconds — chrono modéré
@@ -65,14 +48,39 @@ export default function Level10QuizScreen() {
   const [correctCount, setCorrectCount] = useState(0);
   const [chainPerfect, setChainPerfect] = useState(true);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
+  const [questions, setQuestions] = useState<Level10Question[] | null>(null);
 
   const timerAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confettiRef = useRef<ConfettiCannon>(null);
   const handoffPop = useRef(new Animated.Value(0)).current;
 
-  const question = QUESTIONS[qIndex];
-  const isLast = qIndex === QUESTIONS.length - 1;
+  useEffect(() => {
+    fetchMixedQuestions(10).then(setQuestions).catch((e) => console.warn('fetch questions failed', e));
+  }, []);
+
+  useEffect(() => {
+    playMusic('archive');
+    return stopMusic;
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'question' || showTutorial || !questions) return;
+    startTimer();
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qIndex, showTutorial, questions]);
+
+  if (!questions) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  const question = questions[qIndex];
+  const isLast = qIndex === questions.length - 1;
   const inChain = qIndex >= CHAIN_START;
 
   function startTimer() {
@@ -92,18 +100,6 @@ export default function Level10QuizScreen() {
     timerAnim.stopAnimation();
     stopTimerTick();
   }
-
-  useEffect(() => {
-    playMusic('archive');
-    return stopMusic;
-  }, []);
-
-  useEffect(() => {
-    if (phase !== 'question' || showTutorial) return;
-    startTimer();
-    return clearTimer;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qIndex, showTutorial]);
 
   function dismissTutorial() {
     playSfx('tap');
@@ -142,11 +138,14 @@ export default function Level10QuizScreen() {
       setTimeout(advance, 800);
     } else {
       if (inChain) setChainPerfect(false);
-      loseHeart();
+      const heartsLeft = loseHeart();
       playSfx('wrong');
       playSfx('heartLose');
       showTaunt(`${pick(WRONG_TAUNTS)} · −1 ❤️`, pick(WRONG_MASCOTS), 1200);
-      setTimeout(advance, 1200);
+      setTimeout(() => {
+        if (heartsLeft <= 0) (navigation as any).navigate('SoloMap', { openHeartsModal: true });
+        else advance();
+      }, 1200);
     }
   }
 
@@ -197,7 +196,7 @@ export default function Level10QuizScreen() {
               <View style={styles.topbarCenter}>
                 <Text style={styles.topbarTitle}>🎓 Niveau {toRoman(10)} · Les Portes de l'Archive</Text>
                 <View style={styles.dots}>
-                  {QUESTIONS.map((_, i) => (
+                  {questions.map((_, i) => (
                     <View key={i} style={[styles.dot, i < qIndex && styles.dotDone, i === qIndex && styles.dotCurrent]} />
                   ))}
                 </View>
@@ -279,7 +278,7 @@ export default function Level10QuizScreen() {
             <Text style={styles.qualifiedFlavor}>{story.outro}</Text>
             {chainPerfect && <Text style={styles.chainPerfectBadge}>🔥 Chaîne finale parfaite !</Text>}
             <Text style={styles.completeSub}>
-              {correctCount}/{QUESTIONS.length} bonnes réponses · {hearts} ❤️ restants
+              {correctCount}/{questions.length} bonnes réponses · {hearts} ❤️ restants
             </Text>
             <Pressable style={styles.completeBtn} onPress={goToHandoff}>
               <LinearGradient colors={[colors.goldLt, colors.gold, colors.goldDp]} style={StyleSheet.absoluteFill} />

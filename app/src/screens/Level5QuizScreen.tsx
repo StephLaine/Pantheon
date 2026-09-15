@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,27 +23,16 @@ import { useMascotTaunt } from '../components/MascotTaunt';
 import { STORY } from '../data/story';
 import { playSfx, playMusic, stopMusic, playStinger, startTimerTick, stopTimerTick } from '../audio/sound';
 import { useGameStore } from '../state/game';
+import { fetchFlatQuestions, QcmQuestion } from '../data/quizContent';
 
 const story = STORY[5];
 
-// mockup-only question pool — frontend flow for Level 5 (Hermes' Trailhead,
-// "L'Élan"): unlike levels 1-4, this isn't a fixed question count — the goal
-// is a CHAIN of 3 correct answers in a row. Breaking the chain costs a heart
-// and resets the streak to 0 but never ends the level ("version douce" per
-// kwizkach_gameplay_niveaux.md); reaching a streak of 3 ends it in success.
-// The pool loops (modulo) in the rare case a run needs more than 10 questions.
-const QUESTION_POOL = [
-  { prompt: "Combien de zéros y a-t-il dans un million ?", choices: ['4', '5', '6', '7'], correct: 2 },
-  { prompt: 'Quelle est la plus grande planète du système solaire ?', choices: ['Terre', 'Mars', 'Jupiter', 'Saturne'], correct: 2 },
-  { prompt: "Combien de lettres compte l'alphabet français ?", choices: ['24', '25', '26', '27'], correct: 2 },
-  { prompt: "Quel est le symbole chimique de l'or ?", choices: ['Ag', 'Au', 'Fe', 'Pb'], correct: 1 },
-  { prompt: 'Combien de cordes une guitare classique a-t-elle ?', choices: ['4', '5', '6', '7'], correct: 2 },
-  { prompt: 'Quel est l\'animal terrestre le plus rapide ?', choices: ['Lion', 'Guépard', 'Cheval', 'Antilope'], correct: 1 },
-  { prompt: "Combien de couleurs compte l'arc-en-ciel ?", choices: ['5', '6', '7', '8'], correct: 2 },
-  { prompt: 'Quelle est la capitale du Canada ?', choices: ['Toronto', 'Montréal', 'Ottawa', 'Vancouver'], correct: 2 },
-  { prompt: 'Combien de dents un adulte humain a-t-il en moyenne ?', choices: ['28', '30', '32', '34'], correct: 2 },
-  { prompt: 'Quel est le plus petit pays du monde ?', choices: ['Monaco', 'Vatican', 'Malte', 'Andorre'], correct: 1 },
-];
+// Level 5 (Hermes' Trailhead, "L'Élan"): unlike levels 1-4, this isn't a fixed
+// question count — the goal is a CHAIN of 3 correct answers in a row. Breaking
+// the chain costs a heart and resets the streak to 0 but never ends the level
+// ("version douce" per kwizkach_gameplay_niveaux.md); reaching a streak of 3
+// ends it in success. The pool loops (modulo) in the rare case a run needs
+// more questions than the fetched pool contains.
 
 const QUESTION_TIME = 15; // seconds — chrono moyen (entre les 20s des niv. 1-3 et les 12s du niv. 4)
 const START_HEARTS = 3;
@@ -61,16 +50,41 @@ export default function Level5QuizScreen() {
   const [selected, setSelected] = useState<number | null>(null);
   const hearts = useGameStore((s) => s.hearts);
   const loseHeart = useGameStore((s) => s.loseHeart);
-  const gainHearts = useGameStore((s) => s.gainHearts);
+  const gainHeartBonus = useGameStore((s) => s.gainHeartBonus);
   const completeLevel = useGameStore((s) => s.completeLevel);
   const [streak, setStreak] = useState(0);
+  const [questionPool, setQuestionPool] = useState<QcmQuestion[] | null>(null);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
 
   const timerAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confettiRef = useRef<ConfettiCannon>(null);
 
-  const question = QUESTION_POOL[poolIndex % QUESTION_POOL.length];
+  useEffect(() => {
+    playMusic('routeSacree');
+    return stopMusic;
+  }, []);
+
+  useEffect(() => {
+    fetchFlatQuestions(5).then(setQuestionPool).catch((e) => console.warn('fetch questions failed', e));
+  }, []);
+
+  useEffect(() => {
+    if (showTutorial || !questionPool) return;
+    startTimer();
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poolIndex, showTutorial, questionPool]);
+
+  if (!questionPool) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  const question = questionPool[poolIndex % questionPool.length];
 
   function startTimer() {
     timerAnim.setValue(1);
@@ -89,18 +103,6 @@ export default function Level5QuizScreen() {
     timerAnim.stopAnimation();
     stopTimerTick();
   }
-
-  useEffect(() => {
-    playMusic('routeSacree');
-    return stopMusic;
-  }, []);
-
-  useEffect(() => {
-    if (showTutorial) return;
-    startTimer();
-    return clearTimer;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poolIndex, showTutorial]);
 
   function onTimeout() {
     setSelected(null);
@@ -138,7 +140,7 @@ export default function Level5QuizScreen() {
         showTaunt('⚡ Élan parfait !', mascots.jackpot, 1100);
         playSfx('confetti'); // heart-gain cue
         setTimeout(() => {
-          gainHearts(1); // 🎁 1 cœur gratuit à la réussite
+          gainHeartBonus(); // 🎁 1 cœur gratuit à la réussite
           setPhase('complete');
           completeLevel(5);
           stopMusic();
@@ -150,7 +152,7 @@ export default function Level5QuizScreen() {
       showTaunt(`⚡ Bonne réponse ! Élan ×${nextStreak}`, mascots.correct, 800);
       setTimeout(advance, 800);
     } else {
-      loseHeart();
+      const heartsLeft = loseHeart();
       playSfx('wrong');
       playSfx('heartLose');
       if (streak > 0) {
@@ -159,7 +161,10 @@ export default function Level5QuizScreen() {
       }
       setStreak(0);
       showTaunt(`${pick(WRONG_TAUNTS)} · élan brisé, −1 ❤️`, pick(WRONG_MASCOTS), 1300);
-      setTimeout(advance, 1300);
+      setTimeout(() => {
+        if (heartsLeft <= 0) (navigation as any).navigate('SoloMap', { openHeartsModal: true });
+        else advance();
+      }, 1300);
     }
   }
 

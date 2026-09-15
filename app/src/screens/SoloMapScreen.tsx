@@ -13,7 +13,7 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import Svg, { Path } from 'react-native-svg';
 import ConfettiCannon from 'react-native-confetti-cannon';
 
@@ -32,6 +32,7 @@ import {
 } from '../data/pantheon';
 import LevelNode from '../components/LevelNode';
 import { useGameStore, HEARTS_MAX } from '../state/game';
+import { playMusic, stopMusic } from '../audio/sound';
 
 // hearts can grow past this (streak bonuses, refills, etc.) — rather than drawing
 // one icon per heart, show a capped row and badge the count once it overflows
@@ -90,9 +91,10 @@ export default function SoloMapScreen() {
   const amplitude = Math.min(90, mapWidth * 0.26);
 
   const hearts = useGameStore((s) => s.hearts);
+  const coins = useGameStore((s) => s.coins);
   const currentLevel = useGameStore((s) => s.currentLevel);
   const completedLevels = useGameStore((s) => s.completedLevels);
-  const gainHearts = useGameStore((s) => s.gainHearts);
+  const grantHeartFromAd = useGameStore((s) => s.grantHeartFromAd);
   const setHearts = useGameStore((s) => s.setHearts);
 
   const levels: LevelInfo[] = useMemo(
@@ -164,6 +166,11 @@ export default function SoloMapScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    playMusic('menu');
+    return stopMusic;
+  }, []);
+
   const [toast, setToast] = useState<string | null>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,6 +189,17 @@ export default function SoloMapScreen() {
   const [boardOpen, setBoardOpen] = useState(false);
   const confettiRef = useRef<ConfettiCannon>(null);
 
+  // a level screen redirects here (with this param) the moment hearts hit 0
+  // mid-question, so the refill modal is already open when the player lands
+  const route = useRoute<any>();
+  useEffect(() => {
+    if (route.params?.openHeartsModal) {
+      setHeartsOpen(true);
+      navigation.setParams({ openHeartsModal: undefined } as never);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.openHeartsModal]);
+
   // only Levels 1–10 (Hermes' Trailhead) have a real (mockup) question flow
   // built so far — everything else keeps the placeholder toast/chest behavior
   // until its own quiz exists.
@@ -196,6 +214,10 @@ export default function SoloMapScreen() {
     if (screen) {
       if (level.state === 'locked') {
         say(`🔒 Verrouillé — termine d'abord le niveau ${toRoman(level.n - 1)}`);
+        return;
+      }
+      if (hearts <= 0) {
+        setHeartsOpen(true);
         return;
       }
       // 'current' or 'done' (replay) both drop straight into the real quiz —
@@ -370,7 +392,7 @@ export default function SoloMapScreen() {
           </View>
           <LinearGradient colors={[HC.cyan, HC.blue]} style={styles.coinPill}>
             <Text>🪙</Text>
-            <Text style={styles.coinText}>240</Text>
+            <Text style={styles.coinText}>{coins}</Text>
           </LinearGradient>
         </View>
 
@@ -457,7 +479,7 @@ export default function SoloMapScreen() {
             <Text style={styles.cardTitle}>Plus de cœurs</Text>
             <Text style={styles.cardBody}>Recharge pour continuer à gravir le Chemin du Panthéon.</Text>
             {[
-              { icon: '📺', label: 'Regarder une pub', sub: '+1 cœur, instantanément', price: 'Gratuit', msg: '▶️ Lecture de la pub… +1 cœur !', apply: () => gainHearts(1) },
+              { icon: '📺', label: 'Regarder une pub', sub: '+1 cœur, instantanément', price: 'Gratuit', msg: '▶️ Lecture de la pub… +1 cœur !', apply: () => grantHeartFromAd() },
               { icon: '❤️', label: 'Recharger 5 cœurs', sub: 'Retour à pleine forme', price: '0,99 $', msg: '💳 Achat : Recharger 5 cœurs — 0,99 $', apply: () => setHearts(HEARTS_MAX) },
               { icon: '♾️', label: 'Cœurs illimités', sub: 'Pendant 7 jours', price: '2,99 $', msg: '💳 Achat : Cœurs illimités — 2,99 $', apply: undefined },
             ].map((opt) => (

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,53 +23,9 @@ import { useMascotTaunt } from '../components/MascotTaunt';
 import { STORY } from '../data/story';
 import { playSfx, playMusic, stopMusic, playStinger, startTimerTick, stopTimerTick } from '../audio/sound';
 import { useGameStore } from '../state/game';
+import { fetchCategories, QuizCategory } from '../data/quizContent';
 
 const story = STORY[7];
-
-// mockup-only question banks — frontend flow for Level 7 (Hermes' Trailhead,
-// "Le Repos du Voyageur"): a deliberate breather right after the Level 6 wall.
-// Same category-choice + QCM shape as Level 2, but looser pacing, and it ends
-// with a free 50/50 — taught here, actually usable starting at the Level 9
-// wall, per kwizkach_gameplay_niveaux.md. Fresh question sets (no repeats of
-// Level 2's banks).
-const CATEGORIES = [
-  {
-    key: 'sport',
-    label: 'Sport',
-    icon: '⚽',
-    questions: [
-      { prompt: 'Combien de sets faut-il gagner pour remporter un match de tennis en Grand Chelem (hommes) ?', choices: ['2', '3', '4', '5'], correct: 1 },
-      { prompt: "Dans quel sport peut-on marquer un « ace » ?", choices: ['Golf', 'Tennis', 'Boxe', 'Rugby'], correct: 1 },
-      { prompt: 'Combien d\'anneaux compte le logo olympique ?', choices: ['3', '4', '5', '6'], correct: 2 },
-      { prompt: 'Quel pays a inventé le judo ?', choices: ['Chine', 'Japon', 'Corée', 'Thaïlande'], correct: 1 },
-      { prompt: 'Combien de joueurs une équipe de volley-ball aligne-t-elle sur le terrain ?', choices: ['5', '6', '7', '8'], correct: 1 },
-    ],
-  },
-  {
-    key: 'histoire',
-    label: 'Histoire',
-    icon: '📜',
-    questions: [
-      { prompt: 'Qui a peint la Joconde ?', choices: ['Michel-Ange', 'Léonard de Vinci', 'Raphaël', 'Donatello'], correct: 1 },
-      { prompt: "En quelle année l'homme a-t-il marché sur la Lune pour la première fois ?", choices: ['1965', '1969', '1972', '1959'], correct: 1 },
-      { prompt: 'Quel roi français est surnommé le « Roi Soleil » ?', choices: ['Louis XIV', 'Louis XVI', 'François Ier', 'Henri IV'], correct: 0 },
-      { prompt: 'Quelle ancienne civilisation a construit le Machu Picchu ?', choices: ['Aztèque', 'Maya', 'Inca', 'Olmèque'], correct: 2 },
-      { prompt: "Qui a rédigé la Déclaration d'indépendance des États-Unis ?", choices: ['Lincoln', 'Jefferson', 'Franklin', 'Washington'], correct: 1 },
-    ],
-  },
-  {
-    key: 'sciences',
-    label: 'Sciences',
-    icon: '🔬',
-    questions: [
-      { prompt: "Combien d'os compte le corps humain adulte ?", choices: ['186', '206', '226', '246'], correct: 1 },
-      { prompt: 'Quelle est l\'unité de mesure de la force ?', choices: ['Watt', 'Newton', 'Joule', 'Pascal'], correct: 1 },
-      { prompt: 'Quel est le plus grand organe du corps humain ?', choices: ['Foie', 'Cerveau', 'Peau', 'Cœur'], correct: 2 },
-      { prompt: 'Quelle planète est la plus proche du Soleil ?', choices: ['Vénus', 'Mercure', 'Mars', 'Terre'], correct: 1 },
-      { prompt: 'Combien de chromosomes une cellule humaine possède-t-elle ?', choices: ['23', '46', '44', '48'], correct: 1 },
-    ],
-  },
-];
 
 const QUESTION_TIME = 25; // seconds — chrono relâché, plus long qu'aux niveaux 1-3
 const START_HEARTS = 3;
@@ -88,12 +44,37 @@ export default function Level7QuizScreen() {
   const completeLevel = useGameStore((s) => s.completeLevel);
   const [correctCount, setCorrectCount] = useState(0);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
+  const [categories, setCategories] = useState<QuizCategory[] | null>(null);
 
   const timerAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confettiRef = useRef<ConfettiCannon>(null);
 
-  const category = categoryIndex !== null ? CATEGORIES[categoryIndex] : null;
+  useEffect(() => {
+    fetchCategories(7).then(setCategories).catch((e) => console.warn('fetch categories failed', e));
+  }, []);
+
+  useEffect(() => {
+    playMusic('repos');
+    return stopMusic;
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'question') return;
+    startTimer();
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qIndex, phase]);
+
+  if (!categories) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  const category = categoryIndex !== null ? categories[categoryIndex] : null;
   const questions = category?.questions ?? [];
   const question = questions[qIndex];
   const isLast = qIndex === questions.length - 1;
@@ -115,18 +96,6 @@ export default function Level7QuizScreen() {
     timerAnim.stopAnimation();
     stopTimerTick();
   }
-
-  useEffect(() => {
-    playMusic('repos');
-    return stopMusic;
-  }, []);
-
-  useEffect(() => {
-    if (phase !== 'question') return;
-    startTimer();
-    return clearTimer;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qIndex, phase]);
 
   function chooseCategory(i: number) {
     playSfx('tap');
@@ -155,11 +124,14 @@ export default function Level7QuizScreen() {
       showTaunt('⚡ Bonne réponse !', mascots.correct, 900);
       setTimeout(advance, 900);
     } else {
-      loseHeart();
+      const heartsLeft = loseHeart();
       playSfx('wrong');
       playSfx('heartLose');
       showTaunt(`${pick(WRONG_TAUNTS)} · −1 ❤️`, pick(WRONG_MASCOTS), 1300);
-      setTimeout(advance, 1300);
+      setTimeout(() => {
+        if (heartsLeft <= 0) (navigation as any).navigate('SoloMap', { openHeartsModal: true });
+        else advance();
+      }, 1300);
     }
   }
 
@@ -225,7 +197,7 @@ export default function Level7QuizScreen() {
             <Text style={styles.storyIntro}>{story.intro}</Text>
             <Text style={styles.calmSub}>Une borne détendue. Choisis ta route.</Text>
             <View style={styles.categoryList}>
-              {CATEGORIES.map((c, i) => (
+              {categories.map((c, i) => (
                 <Pressable key={c.key} style={styles.categoryBtn} onPress={() => chooseCategory(i)}>
                   <Text style={styles.categoryIcon}>{c.icon}</Text>
                   <Text style={styles.categoryLabel}>{c.label}</Text>

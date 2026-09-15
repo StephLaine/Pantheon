@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,27 +20,12 @@ import { useMascotTaunt } from '../components/MascotTaunt';
 import { STORY } from '../data/story';
 import { playSfx, playMusic, stopMusic, playStinger, startTimerTick, stopTimerTick } from '../audio/sound';
 import { useGameStore, HEARTS_MAX } from '../state/game';
+import { fetchFlatQuestions, QcmQuestion } from '../data/quizContent';
 
 const story = STORY[9];
 
-// mockup-only question bank — frontend flow for Level 9 (Hermes' Trailhead,
-// "🧱 MUR 2 · Le Seuil"): sudden death. Survive 5 questions in a row; ONE
-// wrong answer or timeout ends the attempt, costs a heart, and restarts from
-// question 1 (map progress itself is untouched). The free 50/50 earned at
-// Level 7 becomes usable here — its actual moment, per
-// kwizkach_gameplay_niveaux.md. Hitting 0 hearts mid-run freezes into the
-// same shop pattern as the Level 6 wall.
-const QUESTIONS = [
-  { prompt: 'Combien de côtés un carré a-t-il ?', choices: ['3', '4', '5', '6'], correct: 1 },
-  { prompt: 'Quelles couleurs compose le drapeau haïtien ?', choices: ['Rouge et bleu', 'Vert et blanc', 'Noir et jaune', 'Bleu et blanc'], correct: 0 },
-  { prompt: 'Combien font 10 − 4 ?', choices: ['5', '6', '7', '8'], correct: 1 },
-  { prompt: "Quel est le premier mois de l'année ?", choices: ['Décembre', 'Janvier', 'Février', 'Mars'], correct: 1 },
-  { prompt: 'Combien de roues une bicyclette a-t-elle ?', choices: ['1', '2', '3', '4'], correct: 1 },
-];
-
 const QUESTION_TIME = 8; // seconds — chrono serré, le 2e mur
 const START_HEARTS = 3;
-const START_COINS = 240;
 const SKIP_COST = 20;
 
 type Phase = 'question' | 'feedback' | 'frozen' | 'complete';
@@ -56,17 +41,43 @@ export default function Level9QuizScreen() {
   const loseHeartStore = useGameStore((s) => s.loseHeart);
   const setHeartsStore = useGameStore((s) => s.setHearts);
   const completeLevel = useGameStore((s) => s.completeLevel);
-  const [coins, setCoins] = useState(START_COINS);
+  const coins = useGameStore((s) => s.coins);
+  const spendCoins = useGameStore((s) => s.spendCoins);
   const [fiftyFiftyUsed, setFiftyFiftyUsed] = useState(false);
   const [eliminated, setEliminated] = useState<number[]>([]);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
+  const [questions, setQuestions] = useState<QcmQuestion[] | null>(null);
 
   const timerAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confettiRef = useRef<ConfettiCannon>(null);
 
-  const question = QUESTIONS[qIndex];
-  const isLast = qIndex === QUESTIONS.length - 1;
+  useEffect(() => {
+    fetchFlatQuestions(9).then(setQuestions).catch((e) => console.warn('fetch questions failed', e));
+  }, []);
+
+  useEffect(() => {
+    playMusic('mur');
+    return stopMusic;
+  }, []);
+
+  useEffect(() => {
+    if (showTutorial || phase === 'frozen' || !questions) return;
+    startTimer();
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qIndex, showTutorial, questions]);
+
+  if (!questions) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  const question = questions[qIndex];
+  const isLast = qIndex === questions.length - 1;
 
   function startTimer() {
     timerAnim.setValue(1);
@@ -85,18 +96,6 @@ export default function Level9QuizScreen() {
     timerAnim.stopAnimation();
     stopTimerTick();
   }
-
-  useEffect(() => {
-    playMusic('mur');
-    return stopMusic;
-  }, []);
-
-  useEffect(() => {
-    if (showTutorial || phase === 'frozen') return;
-    startTimer();
-    return clearTimer;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qIndex, showTutorial]);
 
   function loseHeart(): boolean {
     const next = loseHeartStore();
@@ -172,9 +171,14 @@ export default function Level9QuizScreen() {
   }
 
   function payToSkip() {
+    if (coins < SKIP_COST) {
+      playSfx('wrong');
+      showTaunt('❌ Pas assez de pièces', mascots.winkThumbsUp, 900);
+      return;
+    }
     playSfx('tap');
     playSfx('coinsPay');
-    setCoins((c) => Math.max(0, c - SKIP_COST));
+    spendCoins(SKIP_COST, 'coin_spend_skip', 9);
     setPhase('complete');
     completeLevel(9);
     stopMusic();
@@ -218,7 +222,7 @@ export default function Level9QuizScreen() {
               <View style={styles.topbarCenter}>
                 <Text style={styles.topbarTitle}>🧱 Niveau {toRoman(9)} · Le Seuil</Text>
                 <View style={styles.dots}>
-                  {QUESTIONS.map((_, i) => (
+                  {questions.map((_, i) => (
                     <View key={i} style={[styles.dot, i < qIndex && styles.dotDone, i === qIndex && styles.dotCurrent]} />
                   ))}
                 </View>
@@ -319,7 +323,11 @@ export default function Level9QuizScreen() {
             <Image source={mascots.defeat} style={styles.tutorialMascot} contentFit="contain" />
             <Text style={styles.tutorialTitle}>Plus de cœurs...</Text>
             <Text style={styles.tutorialLine}>Le seuil reste fermé sans un peu d'aide.</Text>
-            <Pressable style={styles.paywallOption} onPress={payToSkip}>
+            <Pressable
+              style={[styles.paywallOption, coins < SKIP_COST && { opacity: 0.4 }]}
+              onPress={payToSkip}
+              disabled={coins < SKIP_COST}
+            >
               <Text style={styles.paywallOptionTxt}>⏭️ Payer {SKIP_COST} 🪙 · Franchir le seuil</Text>
             </Pressable>
             <Pressable style={styles.paywallOptionAlt} onPress={buyHearts}>

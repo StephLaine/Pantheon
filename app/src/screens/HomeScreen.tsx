@@ -16,6 +16,8 @@ import { mascots } from '../assets';
 import { HC, HF } from '../theme/home';
 import { useGameStore, HEARTS_MAX } from '../state/game';
 import StreakReveal from '../components/StreakReveal';
+import SettingsModal from '../components/SettingsModal';
+import { playMusic, stopMusic } from '../audio/sound';
 
 const UNREAD_NOTIFICATIONS = 3;
 
@@ -24,7 +26,7 @@ const STREAK_DAYS = 12;
 const QUICK_LINKS = [
   { key: 'categories', icon: '📚', label: 'Catégories', bg: [HC.blueLt, HC.blue], msg: 'Ouverture des catégories…' },
   { key: 'daily', icon: '🎯', label: 'Quotidien', bg: [HC.red, '#FF6B6B'], msg: '🎯 Récompense quotidienne : +250 XP et 50 pièces !', dot: true },
-  { key: 'settings', icon: '⚙️', label: 'Réglages', bg: ['#8894A8', '#5C6B82'], msg: 'Ouverture des réglages…' },
+  { key: 'settings', icon: '⚙️', label: 'Réglages', bg: ['#8894A8', '#5C6B82'] },
 ];
 
 export default function HomeScreen() {
@@ -32,7 +34,9 @@ export default function HomeScreen() {
   const hearts = useGameStore((s) => s.hearts);
   const hasSeenStreakIntro = useGameStore((s) => s.hasSeenStreakIntro);
   const markStreakIntroSeen = useGameStore((s) => s.markStreakIntroSeen);
+  const touchDailyStreak = useGameStore((s) => s.touchDailyStreak);
   const [toast, setToast] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -52,6 +56,13 @@ export default function HomeScreen() {
   const btnScale = useRef(new Animated.Value(1)).current;
   const profileScale = useRef(new Animated.Value(1)).current;
   const notifScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    playMusic('menu');
+    touchDailyStreak();
+    return stopMusic;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     Animated.stagger(140, [
@@ -240,7 +251,11 @@ export default function HomeScreen() {
         {/* QUICK LINKS: restores reach to Categories / Daily / Settings */}
         <Animated.View style={[styles.quickRow, riseStyle(headerA)]}>
           {QUICK_LINKS.map((q) => (
-            <Pressable key={q.key} style={styles.quickItem} onPress={() => say(q.msg)}>
+            <Pressable
+              key={q.key}
+              style={styles.quickItem}
+              onPress={() => (q.key === 'settings' ? setSettingsOpen(true) : say(q.msg!))}
+            >
               <LinearGradient colors={q.bg as [string, string]} style={styles.quickBadge}>
                 <Text style={styles.quickIcon}>{q.icon}</Text>
                 {q.dot && <View style={styles.quickDot} />}
@@ -333,6 +348,8 @@ export default function HomeScreen() {
       )}
 
       {!hasSeenStreakIntro && <StreakReveal days={STREAK_DAYS} onDone={markStreakIntroSeen} />}
+
+      <SettingsModal visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </View>
   );
 }

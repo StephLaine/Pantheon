@@ -1,5 +1,9 @@
 .DS_Store
 *.tsbuildinfo
 
+# Claude Code session/harness state — machine-local, not project content
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
 # scratch duplicate of raw/ from before the tools/audio_prep.py pipeline existed
 audio_staging/

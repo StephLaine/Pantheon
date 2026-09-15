@@ -1,5 +1,7 @@
-import React from 'react';
+import 'react-native-url-polyfill/auto';
+import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
+import type { Session } from '@supabase/supabase-js';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -36,8 +38,11 @@ import Level8QuizScreen from './src/screens/Level8QuizScreen';
 import Level9QuizScreen from './src/screens/Level9QuizScreen';
 import Level10QuizScreen from './src/screens/Level10QuizScreen';
 import PlaceholderScreen from './src/screens/PlaceholderScreen';
+import AuthScreen from './src/screens/AuthScreen';
 import { colors } from './src/theme';
 import { configureAudioSession } from './src/audio/sound';
+import { supabase } from './src/lib/supabase';
+import { useGameStore } from './src/state/game';
 
 configureAudioSession();
 
@@ -78,13 +83,28 @@ export default function App() {
     Fredoka_700Bold,
   });
 
-  if (!fontsLoaded) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
-        <ActivityIndicator color="#fff" size="large" />
-      </View>
-    );
-  }
+  // undefined = still checking for a persisted session, null = signed out
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const storeLoading = useGameStore((s) => s.loading);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (session?.user) {
+      useGameStore.getState().hydrate(session.user.id);
+    } else if (session === null) {
+      useGameStore.getState().clearLocal();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id]);
+
+  const showLoading = !fontsLoaded || session === undefined || (!!session && storeLoading);
 
   const linking = {
     prefixes: [],
@@ -102,24 +122,32 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      <NavigationContainer linking={linking}>
-        <Tab.Navigator
-          screenOptions={{ headerShown: false }}
-          tabBar={() => null}
-        >
-          <Tab.Screen name="Home" component={HomeScreen} />
-          <Tab.Screen name="Play" component={PlayStackNavigator} />
-          <Tab.Screen name="Ranking">
-            {() => <PlaceholderScreen title="Classement" />}
-          </Tab.Screen>
-          <Tab.Screen name="Rewards">
-            {() => <PlaceholderScreen title="Récompenses" />}
-          </Tab.Screen>
-          <Tab.Screen name="Profile">
-            {() => <PlaceholderScreen title="Profil" />}
-          </Tab.Screen>
-        </Tab.Navigator>
-      </NavigationContainer>
+      {showLoading ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
+          <ActivityIndicator color="#fff" size="large" />
+        </View>
+      ) : !session ? (
+        <AuthScreen />
+      ) : (
+        <NavigationContainer linking={linking}>
+          <Tab.Navigator
+            screenOptions={{ headerShown: false }}
+            tabBar={() => null}
+          >
+            <Tab.Screen name="Home" component={HomeScreen} />
+            <Tab.Screen name="Play" component={PlayStackNavigator} />
+            <Tab.Screen name="Ranking">
+              {() => <PlaceholderScreen title="Classement" />}
+            </Tab.Screen>
+            <Tab.Screen name="Rewards">
+              {() => <PlaceholderScreen title="Récompenses" />}
+            </Tab.Screen>
+            <Tab.Screen name="Profile">
+              {() => <PlaceholderScreen title="Profil" />}
+            </Tab.Screen>
+          </Tab.Navigator>
+        </NavigationContainer>
+      )}
     </SafeAreaProvider>
   );
 }

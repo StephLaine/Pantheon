@@ -23,6 +23,7 @@ const SFX = {
 } as const;
 
 const MUSIC = {
+  menu: require('../../assets/audio/music/mus_menu_loop.mp3'),
   routeSacree: require('../../assets/audio/music/mus_route_sacree_loop.mp3'),
   elan: require('../../assets/audio/music/mus_elan_loop.mp3'),
   mur: require('../../assets/audio/music/mus_mur_loop.mp3'),

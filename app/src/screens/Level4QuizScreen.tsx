@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,21 +23,9 @@ import { useMascotTaunt } from '../components/MascotTaunt';
 import { STORY } from '../data/story';
 import { playSfx, playMusic, stopMusic, playStinger, startTimerTick, stopTimerTick } from '../audio/sound';
 import { useGameStore } from '../state/game';
+import { fetchTfStatements, TfStatement } from '../data/quizContent';
 
 const story = STORY[4];
-
-// mockup-only statement bank — frontend flow for Level 4 (Hermes' Trailhead,
-// "Vrai / Faux"): 6 true/false statements, tighter 12s timer. Faster and more
-// binary/nervous than levels 1-3 — it's priming the player for the level 6
-// speed wall, per kwizkach_gameplay_niveaux.md.
-const STATEMENTS = [
-  { text: 'Le soleil tourne autour de la Terre.', correct: false },
-  { text: 'Paris est la capitale de la France.', correct: true },
-  { text: 'Un triangle a quatre côtés.', correct: false },
-  { text: "L'eau bout à 100°C au niveau de la mer.", correct: true },
-  { text: 'Les araignées sont des insectes.', correct: false },
-  { text: 'Le cœur humain a quatre cavités.', correct: true },
-];
 
 const QUESTION_TIME = 12; // seconds — plus serré que les niveaux 1-3
 const START_HEARTS = 3;
@@ -56,13 +44,38 @@ export default function Level4QuizScreen() {
   const completeLevel = useGameStore((s) => s.completeLevel);
   const [correctCount, setCorrectCount] = useState(0);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
+  const [statements, setStatements] = useState<TfStatement[] | null>(null);
 
   const timerAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confettiRef = useRef<ConfettiCannon>(null);
 
-  const statement = STATEMENTS[qIndex];
-  const isLast = qIndex === STATEMENTS.length - 1;
+  useEffect(() => {
+    fetchTfStatements(4).then(setStatements).catch((e) => console.warn('fetch statements failed', e));
+  }, []);
+
+  useEffect(() => {
+    playMusic('routeSacree');
+    return stopMusic;
+  }, []);
+
+  useEffect(() => {
+    if (showTutorial || !statements) return;
+    startTimer();
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qIndex, showTutorial, statements]);
+
+  if (!statements) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  const statement = statements[qIndex];
+  const isLast = qIndex === statements.length - 1;
 
   function startTimer() {
     timerAnim.setValue(1);
@@ -81,18 +94,6 @@ export default function Level4QuizScreen() {
     timerAnim.stopAnimation();
     stopTimerTick();
   }
-
-  useEffect(() => {
-    playMusic('routeSacree');
-    return stopMusic;
-  }, []);
-
-  useEffect(() => {
-    if (showTutorial) return;
-    startTimer();
-    return clearTimer;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qIndex, showTutorial]);
 
   function onTimeout() {
     setSelected(null);
@@ -116,11 +117,14 @@ export default function Level4QuizScreen() {
       showTaunt('⚡ Bonne réponse !', mascots.correct, 800);
       setTimeout(advance, 800);
     } else {
-      loseHeart();
+      const heartsLeft = loseHeart();
       playSfx('wrong');
       playSfx('heartLose');
       showTaunt(`${pick(WRONG_TAUNTS)} · −1 ❤️`, pick(WRONG_MASCOTS), 1200);
-      setTimeout(advance, 1200);
+      setTimeout(() => {
+        if (heartsLeft <= 0) (navigation as any).navigate('SoloMap', { openHeartsModal: true });
+        else advance();
+      }, 1200);
     }
   }
 
@@ -171,7 +175,7 @@ export default function Level4QuizScreen() {
               <View style={styles.topbarCenter}>
                 <Text style={styles.topbarTitle}>Niveau {toRoman(4)} · Vrai / Faux</Text>
                 <View style={styles.dots}>
-                  {STATEMENTS.map((_, i) => (
+                  {statements.map((_, i) => (
                     <View key={i} style={[styles.dot, i < qIndex && styles.dotDone, i === qIndex && styles.dotCurrent]} />
                   ))}
                 </View>
@@ -225,7 +229,7 @@ export default function Level4QuizScreen() {
             <Text style={styles.completeTitle}>Borne 4 franchie !</Text>
             <Text style={styles.storyOutro}>{story.outro}</Text>
             <Text style={styles.completeSub}>
-              {correctCount}/{STATEMENTS.length} bonnes réponses · {hearts} ❤️ restants
+              {correctCount}/{statements.length} bonnes réponses · {hearts} ❤️ restants
             </Text>
             <Pressable style={styles.completeBtn} onPress={goBack}>
               <LinearGradient colors={[colors.goldLt, colors.gold, colors.goldDp]} style={StyleSheet.absoluteFill} />

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,27 +23,16 @@ import { useMascotTaunt } from '../components/MascotTaunt';
 import { STORY } from '../data/story';
 import { playSfx, playMusic, stopMusic, playStinger, startTimerTick, stopTimerTick } from '../audio/sound';
 import { useGameStore } from '../state/game';
+import { fetchFlatQuestions, QcmQuestion } from '../data/quizContent';
 
 const story = STORY[8];
 
-// mockup-only question pool — frontend flow for Level 8 (Hermes' Trailhead,
-// "Le Vol"): the "real" version of Level 5's chain — same break rule (-1 ❤️
-// and streak resets to 0, no other punishment), but the goal is now 4 in a
-// row instead of 3, and the timer is tighter. Ends with the LAST free heart
-// of the arc, priming the player for the Level 9 sudden-death wall, per
-// kwizkach_gameplay_niveaux.md. Pool loops (modulo) if a run needs more.
-const QUESTION_POOL = [
-  { prompt: "Combien de minutes y a-t-il dans une heure ?", choices: ['50', '60', '70', '100'], correct: 1 },
-  { prompt: 'Quelle est la langue la plus parlée au monde (locuteurs natifs) ?', choices: ['Anglais', 'Mandarin', 'Espagnol', 'Hindi'], correct: 1 },
-  { prompt: 'Quel est le plus grand désert chaud du monde ?', choices: ['Gobi', 'Sahara', 'Kalahari', 'Atacama'], correct: 1 },
-  { prompt: 'Combien de faces un cube a-t-il ?', choices: ['4', '5', '6', '8'], correct: 2 },
-  { prompt: 'Quel est l\'os le plus long du corps humain ?', choices: ['Tibia', 'Fémur', 'Humérus', 'Radius'], correct: 1 },
-  { prompt: "Quelle est la capitale de l'Espagne ?", choices: ['Barcelone', 'Madrid', 'Séville', 'Valence'], correct: 1 },
-  { prompt: 'Combien de temps la Terre met-elle à faire un tour sur elle-même ?', choices: ['12h', '24h', '48h', '365j'], correct: 1 },
-  { prompt: 'Quel est le symbole chimique du fer ?', choices: ['Fe', 'Ir', 'Fr', 'Fi'], correct: 0 },
-  { prompt: 'Combien de cœurs une pieuvre a-t-elle ?', choices: ['1', '2', '3', '4'], correct: 2 },
-  { prompt: 'Quelle est la plus haute montagne du monde ?', choices: ['K2', 'Everest', 'Kilimandjaro', 'Mont Blanc'], correct: 1 },
-];
+// Level 8 (Hermes' Trailhead, "Le Vol"): the "real" version of Level 5's
+// chain — same break rule (-1 ❤️ and streak resets to 0, no other punishment),
+// but the goal is now 4 in a row instead of 3, and the timer is tighter. Ends
+// with the LAST free heart of the arc, priming the player for the Level 9
+// sudden-death wall, per kwizkach_gameplay_niveaux.md. Pool loops (modulo) if
+// a run needs more questions than the fetched pool contains.
 
 const QUESTION_TIME = 10; // seconds — chrono moyen-serré (entre les 15s du niv. 5 et les 7s du mur 6)
 const START_HEARTS = 3;
@@ -61,16 +50,41 @@ export default function Level8QuizScreen() {
   const [selected, setSelected] = useState<number | null>(null);
   const hearts = useGameStore((s) => s.hearts);
   const loseHeart = useGameStore((s) => s.loseHeart);
-  const gainHearts = useGameStore((s) => s.gainHearts);
+  const gainHeartBonus = useGameStore((s) => s.gainHeartBonus);
   const completeLevel = useGameStore((s) => s.completeLevel);
   const [streak, setStreak] = useState(0);
+  const [questionPool, setQuestionPool] = useState<QcmQuestion[] | null>(null);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
 
   const timerAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confettiRef = useRef<ConfettiCannon>(null);
 
-  const question = QUESTION_POOL[poolIndex % QUESTION_POOL.length];
+  useEffect(() => {
+    playMusic('elan');
+    return stopMusic;
+  }, []);
+
+  useEffect(() => {
+    fetchFlatQuestions(8).then(setQuestionPool).catch((e) => console.warn('fetch questions failed', e));
+  }, []);
+
+  useEffect(() => {
+    if (showTutorial || !questionPool) return;
+    startTimer();
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poolIndex, showTutorial, questionPool]);
+
+  if (!questionPool) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  const question = questionPool[poolIndex % questionPool.length];
 
   function startTimer() {
     timerAnim.setValue(1);
@@ -89,18 +103,6 @@ export default function Level8QuizScreen() {
     timerAnim.stopAnimation();
     stopTimerTick();
   }
-
-  useEffect(() => {
-    playMusic('elan');
-    return stopMusic;
-  }, []);
-
-  useEffect(() => {
-    if (showTutorial) return;
-    startTimer();
-    return clearTimer;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poolIndex, showTutorial]);
 
   function onTimeout() {
     setSelected(null);
@@ -136,7 +138,7 @@ export default function Level8QuizScreen() {
         showTaunt('⚡ Le vol est parfait !', mascots.jackpot, 1100);
         playSfx('confetti'); // heart-gain cue
         setTimeout(() => {
-          gainHearts(1); // 🎁 1 cœur gratuit — le dernier de l'arc
+          gainHeartBonus(); // 🎁 1 cœur gratuit — le dernier de l'arc
           setPhase('complete');
           completeLevel(8);
           stopMusic();
@@ -148,13 +150,16 @@ export default function Level8QuizScreen() {
       showTaunt(`⚡ Bonne réponse ! Vol ×${nextStreak}`, mascots.correct, 750);
       setTimeout(advance, 750);
     } else {
-      loseHeart();
+      const heartsLeft = loseHeart();
       playSfx('wrong');
       playSfx('heartLose');
       if (streak > 0) playSfx('chainBreak');
       setStreak(0);
       showTaunt(`${pick(WRONG_TAUNTS)} · vol interrompu, −1 ❤️`, pick(WRONG_MASCOTS), 1200);
-      setTimeout(advance, 1200);
+      setTimeout(() => {
+        if (heartsLeft <= 0) (navigation as any).navigate('SoloMap', { openHeartsModal: true });
+        else advance();
+      }, 1200);
     }
   }
 

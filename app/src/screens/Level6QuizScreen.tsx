@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,27 +23,12 @@ import { useMascotTaunt } from '../components/MascotTaunt';
 import { STORY } from '../data/story';
 import { playSfx, playMusic, stopMusic, playStinger, startTimerTick, stopTimerTick } from '../audio/sound';
 import { useGameStore, HEARTS_MAX } from '../state/game';
+import { fetchFlatQuestions, QcmQuestion } from '../data/quizContent';
 
 const story = STORY[6];
 
-// mockup-only question bank — frontend flow for Level 6 (Hermes' Trailhead,
-// "🧱 MUR 1 · La Course d'Hermès"): the first wall. 7 fast questions, a tight
-// 7s timer, and — unlike every level before it — TIMEOUT COSTS A HEART here
-// too. Hitting 0 hearts mid-level freezes the run and opens the shop, per
-// kwizkach_gameplay_niveaux.md's "conversion principale" moment.
-const QUESTIONS = [
-  { prompt: '2 + 2 = ?', choices: ['3', '4', '5', '6'], correct: 1 },
-  { prompt: 'De quelle couleur est le ciel par temps clair ?', choices: ['Rouge', 'Bleu', 'Vert', 'Jaune'], correct: 1 },
-  { prompt: 'Combien de jours y a-t-il dans une semaine ?', choices: ['5', '6', '7', '8'], correct: 2 },
-  { prompt: 'Quel est le contraire de « chaud » ?', choices: ['Tiède', 'Froid', 'Doux', 'Sec'], correct: 1 },
-  { prompt: 'Combien de pattes une araignée a-t-elle ?', choices: ['6', '8', '10', '12'], correct: 1 },
-  { prompt: "Quelle est la capitale de l'Italie ?", choices: ['Milan', 'Rome', 'Venise', 'Naples'], correct: 1 },
-  { prompt: '1 + 1 = ?', choices: ['1', '2', '3', '4'], correct: 1 },
-];
-
 const QUESTION_TIME = 7; // seconds — chrono SERRÉ, le mur d'Hermès
 const START_HEARTS = 3;
-const START_COINS = 240;
 const SKIP_COST = 20;
 
 type Phase = 'question' | 'feedback' | 'frozen' | 'complete';
@@ -59,16 +44,42 @@ export default function Level6QuizScreen() {
   const loseHeartStore = useGameStore((s) => s.loseHeart);
   const setHeartsStore = useGameStore((s) => s.setHearts);
   const completeLevel = useGameStore((s) => s.completeLevel);
-  const [coins, setCoins] = useState(START_COINS);
+  const coins = useGameStore((s) => s.coins);
+  const spendCoins = useGameStore((s) => s.spendCoins);
   const [correctCount, setCorrectCount] = useState(0);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
+  const [questions, setQuestions] = useState<QcmQuestion[] | null>(null);
 
   const timerAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confettiRef = useRef<ConfettiCannon>(null);
 
-  const question = QUESTIONS[qIndex];
-  const isLast = qIndex === QUESTIONS.length - 1;
+  useEffect(() => {
+    fetchFlatQuestions(6).then(setQuestions).catch((e) => console.warn('fetch questions failed', e));
+  }, []);
+
+  useEffect(() => {
+    playMusic('mur');
+    return stopMusic;
+  }, []);
+
+  useEffect(() => {
+    if (showTutorial || phase === 'frozen' || !questions) return;
+    startTimer();
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qIndex, showTutorial, questions]);
+
+  if (!questions) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  const question = questions[qIndex];
+  const isLast = qIndex === questions.length - 1;
 
   function startTimer() {
     timerAnim.setValue(1);
@@ -87,18 +98,6 @@ export default function Level6QuizScreen() {
     timerAnim.stopAnimation();
     stopTimerTick();
   }
-
-  useEffect(() => {
-    playMusic('mur');
-    return stopMusic;
-  }, []);
-
-  useEffect(() => {
-    if (showTutorial || phase === 'frozen') return;
-    startTimer();
-    return clearTimer;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qIndex, showTutorial]);
 
   function loseHeart(): boolean {
     const next = loseHeartStore();
@@ -163,9 +162,14 @@ export default function Level6QuizScreen() {
   }
 
   function payToSkip() {
+    if (coins < SKIP_COST) {
+      playSfx('wrong');
+      showTaunt('❌ Pas assez de pièces', mascots.winkThumbsUp, 900);
+      return;
+    }
     playSfx('tap');
     playSfx('coinsPay');
-    setCoins((c) => Math.max(0, c - SKIP_COST));
+    spendCoins(SKIP_COST, 'coin_spend_skip', 6);
     setPhase('feedback');
     setSelected(null);
     showTaunt('⏭️ Message envoyé — tu passes cette question', mascots.winkThumbsUp, 800);
@@ -216,7 +220,7 @@ export default function Level6QuizScreen() {
               <View style={styles.topbarCenter}>
                 <Text style={styles.topbarTitle}>🧱 Niveau {toRoman(6)} · La Course d'Hermès</Text>
                 <View style={styles.dots}>
-                  {QUESTIONS.map((_, i) => (
+                  {questions.map((_, i) => (
                     <View key={i} style={[styles.dot, i < qIndex && styles.dotDone, i === qIndex && styles.dotCurrent]} />
                   ))}
                 </View>
@@ -274,7 +278,7 @@ export default function Level6QuizScreen() {
             <Text style={styles.completeFlavor}>« Hermès t'a porté 💨 »</Text>
             <Text style={styles.storyOutro}>{story.outro}</Text>
             <Text style={styles.completeSub}>
-              {correctCount}/{QUESTIONS.length} bonnes réponses · {hearts} ❤️ restants
+              {correctCount}/{questions.length} bonnes réponses · {hearts} ❤️ restants
             </Text>
             <Pressable style={styles.completeBtn} onPress={goBack}>
               <LinearGradient colors={[colors.goldLt, colors.gold, colors.goldDp]} style={StyleSheet.absoluteFill} />
@@ -305,7 +309,11 @@ export default function Level6QuizScreen() {
             <Image source={mascots.defeat} style={styles.tutorialMascot} contentFit="contain" />
             <Text style={styles.tutorialTitle}>Plus de cœurs...</Text>
             <Text style={styles.tutorialLine}>Hermès ne peut plus te porter sans un peu d'aide.</Text>
-            <Pressable style={styles.paywallOption} onPress={payToSkip}>
+            <Pressable
+              style={[styles.paywallOption, coins < SKIP_COST && { opacity: 0.4 }]}
+              onPress={payToSkip}
+              disabled={coins < SKIP_COST}
+            >
               <Text style={styles.paywallOptionTxt}>⏭️ Payer {SKIP_COST} 🪙 · Passer cette question</Text>
             </Pressable>
             <Pressable style={styles.paywallOptionAlt} onPress={buyHearts}>

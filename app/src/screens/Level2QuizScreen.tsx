@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,50 +23,9 @@ import { useMascotTaunt } from '../components/MascotTaunt';
 import { STORY } from '../data/story';
 import { playSfx, playMusic, stopMusic, playStinger, startTimerTick, stopTimerTick } from '../audio/sound';
 import { useGameStore } from '../state/game';
+import { fetchCategories, QuizCategory } from '../data/quizContent';
 
 const story = STORY[2];
-
-// mockup-only question banks — frontend flow for Level 2 (Hermes' Trailhead,
-// "Le Carrefour"): pick one of 3 categories, then 5 QCM from that bank.
-// Generous 20s timer, timeout costs nothing — same pacing as Level 1.
-const CATEGORIES = [
-  {
-    key: 'sport',
-    label: 'Sport',
-    icon: '⚽',
-    questions: [
-      { prompt: 'Combien de joueurs une équipe de football aligne-t-elle sur le terrain ?', choices: ['9', '10', '11', '12'], correct: 2 },
-      { prompt: "Tous les combien d'années ont lieu les Jeux Olympiques d'été ?", choices: ['2', '3', '4', '5'], correct: 2 },
-      { prompt: 'Quel pays a remporté la Coupe du Monde de football 2018 ?', choices: ['Brésil', 'Allemagne', 'France', 'Argentine'], correct: 2 },
-      { prompt: 'Dans quel sport utilise-t-on un « volant » (birdie) ?', choices: ['Golf', 'Tennis', 'Badminton', 'Squash'], correct: 2 },
-      { prompt: 'Combien de temps dure un match de basket-ball NBA (hors prolongations) ?', choices: ['40 min', '48 min', '60 min', '90 min'], correct: 1 },
-    ],
-  },
-  {
-    key: 'histoire',
-    label: 'Histoire',
-    icon: '📜',
-    questions: [
-      { prompt: 'En quelle année a eu lieu la Révolution française ?', choices: ['1789', '1799', '1804', '1815'], correct: 0 },
-      { prompt: 'Qui fut le premier empereur de Rome ?', choices: ['Jules César', 'Auguste', 'Néron', 'Trajan'], correct: 1 },
-      { prompt: 'Quel mur est tombé en 1989 ?', choices: ['Le mur de Berlin', 'La Grande Muraille', "Le mur d'Hadrien", 'La muraille de Chine'], correct: 0 },
-      { prompt: 'Quelle civilisation a construit les pyramides de Gizeh ?', choices: ['Grecque', 'Romaine', 'Égyptienne', 'Maya'], correct: 2 },
-      { prompt: 'Qui a été le premier président des États-Unis ?', choices: ['Lincoln', 'Jefferson', 'Washington', 'Adams'], correct: 2 },
-    ],
-  },
-  {
-    key: 'sciences',
-    label: 'Sciences',
-    icon: '🔬',
-    questions: [
-      { prompt: "Quelle est la formule chimique de l'eau ?", choices: ['CO2', 'H2O', 'O2', 'NaCl'], correct: 1 },
-      { prompt: 'Combien de planètes compte notre système solaire ?', choices: ['7', '8', '9', '10'], correct: 1 },
-      { prompt: 'Quel organe pompe le sang dans le corps humain ?', choices: ['Poumon', 'Foie', 'Cœur', 'Rein'], correct: 2 },
-      { prompt: 'Quelle est la vitesse de la lumière, arrondie ?', choices: ['300 000 km/s', '150 000 km/s', '3 000 km/s', '1 000 000 km/s'], correct: 0 },
-      { prompt: 'Quel gaz les plantes absorbent-elles pour la photosynthèse ?', choices: ['Oxygène', 'Azote', 'CO2', 'Hydrogène'], correct: 2 },
-    ],
-  },
-];
 
 const QUESTION_TIME = 20; // seconds — généreux, comme le niveau 1
 const START_HEARTS = 3;
@@ -85,12 +44,37 @@ export default function Level2QuizScreen() {
   const completeLevel = useGameStore((s) => s.completeLevel);
   const [correctCount, setCorrectCount] = useState(0);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
+  const [categories, setCategories] = useState<QuizCategory[] | null>(null);
 
   const timerAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confettiRef = useRef<ConfettiCannon>(null);
 
-  const category = categoryIndex !== null ? CATEGORIES[categoryIndex] : null;
+  useEffect(() => {
+    fetchCategories(2).then(setCategories).catch((e) => console.warn('fetch categories failed', e));
+  }, []);
+
+  useEffect(() => {
+    playMusic('routeSacree');
+    return stopMusic;
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'question') return;
+    startTimer();
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qIndex, phase]);
+
+  if (!categories) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  const category = categoryIndex !== null ? categories[categoryIndex] : null;
   const questions = category?.questions ?? [];
   const question = questions[qIndex];
   const isLast = qIndex === questions.length - 1;
@@ -112,18 +96,6 @@ export default function Level2QuizScreen() {
     timerAnim.stopAnimation();
     stopTimerTick();
   }
-
-  useEffect(() => {
-    playMusic('routeSacree');
-    return stopMusic;
-  }, []);
-
-  useEffect(() => {
-    if (phase !== 'question') return;
-    startTimer();
-    return clearTimer;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qIndex, phase]);
 
   function chooseCategory(i: number) {
     playSfx('tap');
@@ -153,11 +125,14 @@ export default function Level2QuizScreen() {
       showTaunt('⚡ Bonne réponse !', mascots.correct, 900);
       setTimeout(advance, 900);
     } else {
-      loseHeart();
+      const heartsLeft = loseHeart();
       playSfx('wrong');
       playSfx('heartLose');
       showTaunt(`${pick(WRONG_TAUNTS)} · −1 ❤️`, pick(WRONG_MASCOTS), 1300);
-      setTimeout(advance, 1300);
+      setTimeout(() => {
+        if (heartsLeft <= 0) (navigation as any).navigate('SoloMap', { openHeartsModal: true });
+        else advance();
+      }, 1300);
     }
   }
 
@@ -236,7 +211,7 @@ export default function Level2QuizScreen() {
             <Text style={styles.storyIntro}>{story.intro}</Text>
             <Text style={styles.crossroadsSub}>Choisis ta route pour les 5 prochaines questions.</Text>
             <View style={styles.categoryList}>
-              {CATEGORIES.map((c, i) => (
+              {categories.map((c, i) => (
                 <Pressable key={c.key} style={styles.categoryBtn} onPress={() => chooseCategory(i)}>
                   <Text style={styles.categoryIcon}>{c.icon}</Text>
                   <Text style={styles.categoryLabel}>{c.label}</Text>
