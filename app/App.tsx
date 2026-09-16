@@ -39,6 +39,8 @@ import Level9QuizScreen from './src/screens/Level9QuizScreen';
 import Level10QuizScreen from './src/screens/Level10QuizScreen';
 import PlaceholderScreen from './src/screens/PlaceholderScreen';
 import AuthScreen from './src/screens/AuthScreen';
+import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
+import SyncIssueBanner from './src/components/SyncIssueBanner';
 import { colors } from './src/theme';
 import { configureAudioSession } from './src/audio/sound';
 import { supabase } from './src/lib/supabase';
@@ -85,11 +87,13 @@ export default function App() {
 
   // undefined = still checking for a persisted session, null = signed out
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
   const storeLoading = useGameStore((s) => s.loading);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
       setSession(newSession);
     });
     return () => sub.subscription.unsubscribe();
@@ -126,27 +130,32 @@ export default function App() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.skyTop }}>
           <ActivityIndicator color="#fff" size="large" />
         </View>
+      ) : passwordRecovery ? (
+        <ResetPasswordScreen onDone={() => setPasswordRecovery(false)} />
       ) : !session ? (
         <AuthScreen />
       ) : (
-        <NavigationContainer linking={linking}>
-          <Tab.Navigator
-            screenOptions={{ headerShown: false }}
-            tabBar={() => null}
-          >
-            <Tab.Screen name="Home" component={HomeScreen} />
-            <Tab.Screen name="Play" component={PlayStackNavigator} />
-            <Tab.Screen name="Ranking">
-              {() => <PlaceholderScreen title="Classement" />}
-            </Tab.Screen>
-            <Tab.Screen name="Rewards">
-              {() => <PlaceholderScreen title="Récompenses" />}
-            </Tab.Screen>
-            <Tab.Screen name="Profile">
-              {() => <PlaceholderScreen title="Profil" />}
-            </Tab.Screen>
-          </Tab.Navigator>
-        </NavigationContainer>
+        <>
+          <NavigationContainer linking={linking}>
+            <Tab.Navigator
+              screenOptions={{ headerShown: false }}
+              tabBar={() => null}
+            >
+              <Tab.Screen name="Home" component={HomeScreen} />
+              <Tab.Screen name="Play" component={PlayStackNavigator} />
+              <Tab.Screen name="Ranking">
+                {() => <PlaceholderScreen title="Classement" />}
+              </Tab.Screen>
+              <Tab.Screen name="Rewards">
+                {() => <PlaceholderScreen title="Récompenses" />}
+              </Tab.Screen>
+              <Tab.Screen name="Profile">
+                {() => <PlaceholderScreen title="Profil" />}
+              </Tab.Screen>
+            </Tab.Navigator>
+          </NavigationContainer>
+          <SyncIssueBanner />
+        </>
       )}
     </SafeAreaProvider>
   );
