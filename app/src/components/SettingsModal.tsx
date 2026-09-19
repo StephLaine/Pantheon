@@ -55,7 +55,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
   }
 
   return (
-    <Modal transparent visible={visible} animationType="slide" onRequestClose={close}>
+    <Modal transparent visible={visible} animationType={Platform.OS === 'web' ? 'none' : 'slide'} onRequestClose={close}>
       <View style={styles.overlay}>
         <View style={styles.card}>
           <Pressable style={styles.closeBtn} onPress={close}>

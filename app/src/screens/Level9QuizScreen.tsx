@@ -43,6 +43,10 @@ export default function Level9QuizScreen() {
   const completeLevel = useGameStore((s) => s.completeLevel);
   const coins = useGameStore((s) => s.coins);
   const spendCoins = useGameStore((s) => s.spendCoins);
+  const skipTokens = useGameStore((s) => s.skipTokens);
+  const useSkipToken = useGameStore((s) => s.useSkipToken);
+  const fiftyFiftyTokens = useGameStore((s) => s.fiftyFiftyTokens);
+  const useFiftyFiftyToken = useGameStore((s) => s.useFiftyFiftyToken);
   const [fiftyFiftyUsed, setFiftyFiftyUsed] = useState(false);
   const [eliminated, setEliminated] = useState<number[]>([]);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
@@ -160,23 +164,39 @@ export default function Level9QuizScreen() {
     }
   }
 
-  function useFiftyFifty() {
-    if (fiftyFiftyUsed || phase !== 'question') return;
-    playSfx('tap');
+  async function useFiftyFifty() {
+    if (phase !== 'question') return;
+    if (fiftyFiftyUsed) {
+      if (fiftyFiftyTokens <= 0) return;
+      playSfx('tap');
+      const ok = await useFiftyFiftyToken();
+      if (!ok) return;
+    } else {
+      playSfx('tap');
+      setFiftyFiftyUsed(true);
+    }
     const wrongIndices = question.choices.map((_, i) => i).filter((i) => i !== question.correct);
     const shuffled = [...wrongIndices].sort(() => Math.random() - 0.5);
     setEliminated(shuffled.slice(0, 2));
-    setFiftyFiftyUsed(true);
     showTaunt('🍀 Hermès écarte deux fausses pistes.', mascots.winkThumbsUp, 1200);
   }
 
-  function payToSkip() {
+  async function payToSkip() {
+    playSfx('tap');
+    if (skipTokens > 0 && (await useSkipToken())) {
+      setPhase('complete');
+      completeLevel(9);
+      stopMusic();
+      playSfx('confetti');
+      playStinger('acte2');
+      confettiRef.current?.start();
+      return;
+    }
     if (coins < SKIP_COST) {
       playSfx('wrong');
       showTaunt('❌ Pas assez de pièces', mascots.winkThumbsUp, 900);
       return;
     }
-    playSfx('tap');
     playSfx('coinsPay');
     spendCoins(SKIP_COST, 'coin_spend_skip', 9);
     setPhase('complete');
@@ -275,11 +295,17 @@ export default function Level9QuizScreen() {
               </View>
 
               <Pressable
-                style={[styles.fiftyBtn, fiftyFiftyUsed && styles.fiftyBtnUsed]}
+                style={[styles.fiftyBtn, fiftyFiftyUsed && fiftyFiftyTokens === 0 && styles.fiftyBtnUsed]}
                 onPress={useFiftyFifty}
-                disabled={fiftyFiftyUsed || phase !== 'question'}
+                disabled={(fiftyFiftyUsed && fiftyFiftyTokens === 0) || phase !== 'question'}
               >
-                <Text style={styles.fiftyTxt}>{fiftyFiftyUsed ? '🍀 50/50 utilisé' : '🍀 50/50 · offert au niveau 7'}</Text>
+                <Text style={styles.fiftyTxt}>
+                  {!fiftyFiftyUsed
+                    ? '🍀 50/50 · offert au niveau 7'
+                    : fiftyFiftyTokens > 0
+                      ? `🍀 50/50 · jeton (${fiftyFiftyTokens})`
+                      : '🍀 50/50 utilisé'}
+                </Text>
               </Pressable>
             </View>
 
@@ -324,11 +350,13 @@ export default function Level9QuizScreen() {
             <Text style={styles.tutorialTitle}>Plus de cœurs...</Text>
             <Text style={styles.tutorialLine}>Le seuil reste fermé sans un peu d'aide.</Text>
             <Pressable
-              style={[styles.paywallOption, coins < SKIP_COST && { opacity: 0.4 }]}
+              style={[styles.paywallOption, skipTokens === 0 && coins < SKIP_COST && { opacity: 0.4 }]}
               onPress={payToSkip}
-              disabled={coins < SKIP_COST}
+              disabled={skipTokens === 0 && coins < SKIP_COST}
             >
-              <Text style={styles.paywallOptionTxt}>⏭️ Payer {SKIP_COST} 🪙 · Franchir le seuil</Text>
+              <Text style={styles.paywallOptionTxt}>
+                {skipTokens > 0 ? `⏭️ Utiliser un Jeton Passe (${skipTokens})` : `⏭️ Payer ${SKIP_COST} 🪙 · Franchir le seuil`}
+              </Text>
             </Pressable>
             <Pressable style={styles.paywallOptionAlt} onPress={buyHearts}>
               <Text style={styles.paywallOptionAltTxt}>❤️ Recharger 5 cœurs · 0,99 $</Text>

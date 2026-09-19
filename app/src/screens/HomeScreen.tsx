@@ -92,7 +92,13 @@ export default function HomeScreen() {
       Animated.sequence([
         Animated.timing(sheen, { toValue: 1, duration: 1300, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
         Animated.delay(2300),
-        Animated.timing(sheen, { toValue: 0, duration: 0, useNativeDriver: true }),
+        // duration: 0 here (or in any native-driven loop) is a known trap —
+        // a truly instant native-driven step can desync the native/JS
+        // driver bookkeeping on a real device, later throwing "Attempting
+        // to run JS driven animation on animated node that has been moved
+        // to native" from an unrelated animation on this same value. 1ms is
+        // imperceptible but avoids the zero-duration edge case entirely.
+        Animated.timing(sheen, { toValue: 0, duration: 1, useNativeDriver: true }),
       ]),
     );
     sheenLoop.start();

@@ -46,6 +46,8 @@ export default function Level6QuizScreen() {
   const completeLevel = useGameStore((s) => s.completeLevel);
   const coins = useGameStore((s) => s.coins);
   const spendCoins = useGameStore((s) => s.spendCoins);
+  const skipTokens = useGameStore((s) => s.skipTokens);
+  const useSkipToken = useGameStore((s) => s.useSkipToken);
   const [correctCount, setCorrectCount] = useState(0);
   const { showTaunt, bubble: tauntBubble } = useMascotTaunt();
   const [questions, setQuestions] = useState<QcmQuestion[] | null>(null);
@@ -161,18 +163,10 @@ export default function Level6QuizScreen() {
     }
   }
 
-  function payToSkip() {
-    if (coins < SKIP_COST) {
-      playSfx('wrong');
-      showTaunt('❌ Pas assez de pièces', mascots.winkThumbsUp, 900);
-      return;
-    }
-    playSfx('tap');
-    playSfx('coinsPay');
-    spendCoins(SKIP_COST, 'coin_spend_skip', 6);
+  function doSkip(taunt: string) {
     setPhase('feedback');
     setSelected(null);
-    showTaunt('⏭️ Message envoyé — tu passes cette question', mascots.winkThumbsUp, 800);
+    showTaunt(taunt, mascots.winkThumbsUp, 800);
     setTimeout(() => {
       if (isLast) {
         setPhase('complete');
@@ -186,6 +180,22 @@ export default function Level6QuizScreen() {
         setPhase('question');
       }
     }, 800);
+  }
+
+  async function payToSkip() {
+    playSfx('tap');
+    if (skipTokens > 0 && (await useSkipToken())) {
+      doSkip('⏭️ Jeton Passe utilisé !');
+      return;
+    }
+    if (coins < SKIP_COST) {
+      playSfx('wrong');
+      showTaunt('❌ Pas assez de pièces', mascots.winkThumbsUp, 900);
+      return;
+    }
+    playSfx('coinsPay');
+    spendCoins(SKIP_COST, 'coin_spend_skip', 6);
+    doSkip('⏭️ Message envoyé — tu passes cette question');
   }
 
   function buyHearts() {
@@ -310,11 +320,13 @@ export default function Level6QuizScreen() {
             <Text style={styles.tutorialTitle}>Plus de cœurs...</Text>
             <Text style={styles.tutorialLine}>Hermès ne peut plus te porter sans un peu d'aide.</Text>
             <Pressable
-              style={[styles.paywallOption, coins < SKIP_COST && { opacity: 0.4 }]}
+              style={[styles.paywallOption, skipTokens === 0 && coins < SKIP_COST && { opacity: 0.4 }]}
               onPress={payToSkip}
-              disabled={coins < SKIP_COST}
+              disabled={skipTokens === 0 && coins < SKIP_COST}
             >
-              <Text style={styles.paywallOptionTxt}>⏭️ Payer {SKIP_COST} 🪙 · Passer cette question</Text>
+              <Text style={styles.paywallOptionTxt}>
+                {skipTokens > 0 ? `⏭️ Utiliser un Jeton Passe (${skipTokens})` : `⏭️ Payer ${SKIP_COST} 🪙 · Passer cette question`}
+              </Text>
             </Pressable>
             <Pressable style={styles.paywallOptionAlt} onPress={buyHearts}>
               <Text style={styles.paywallOptionAltTxt}>❤️ Recharger 5 cœurs · 0,99 $</Text>

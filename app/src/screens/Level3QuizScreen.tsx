@@ -45,6 +45,8 @@ export default function Level3QuizScreen() {
   const completeLevel = useGameStore((s) => s.completeLevel);
   const coins = useGameStore((s) => s.coins);
   const spendCoins = useGameStore((s) => s.spendCoins);
+  const skipTokens = useGameStore((s) => s.skipTokens);
+  const useSkipToken = useGameStore((s) => s.useSkipToken);
   const [correctCount, setCorrectCount] = useState(0);
   const [freeSkipUsed, setFreeSkipUsed] = useState(false);
   const [showSkipPaywall, setShowSkipPaywall] = useState(false);
@@ -132,10 +134,14 @@ export default function Level3QuizScreen() {
     }
   }
 
-  function onSkipPress() {
+  async function onSkipPress() {
     if (phase !== 'question') return;
+    playSfx('tap');
+    if (skipTokens > 0 && (await useSkipToken())) {
+      performSkip(false, true);
+      return;
+    }
     if (!freeSkipUsed) {
-      playSfx('tap');
       performSkip(false);
     } else {
       setShowSkipPaywall(true);
@@ -158,7 +164,7 @@ export default function Level3QuizScreen() {
     performSkip(true);
   }
 
-  function performSkip(paid: boolean) {
+  function performSkip(paid: boolean, viaToken = false) {
     clearTimer();
     setShowSkipPaywall(false);
     if (!freeSkipUsed) setFreeSkipUsed(true);
@@ -166,7 +172,11 @@ export default function Level3QuizScreen() {
     setSelected(null);
     setPhase('feedback');
     showTaunt(
-      paid ? '⏭️ Message envoyé — 20 🪙 dépensées' : '⏭️ Hermès porte ta question ailleurs...',
+      viaToken
+        ? '⏭️ Jeton Passe utilisé !'
+        : paid
+          ? '⏭️ Message envoyé — 20 🪙 dépensées'
+          : '⏭️ Hermès porte ta question ailleurs...',
       mascots.winkThumbsUp,
       900,
     );
@@ -272,7 +282,8 @@ export default function Level3QuizScreen() {
 
               <Pressable style={styles.skipBtn} onPress={onSkipPress} disabled={phase !== 'question'}>
                 <Text style={styles.skipTxt}>
-                  ⏭️ Message d'Hermès{!freeSkipUsed ? ' · gratuit' : ` · ${SKIP_COST} 🪙`}
+                  ⏭️ Message d'Hermès
+                  {skipTokens > 0 ? ` · jeton (${skipTokens})` : !freeSkipUsed ? ' · gratuit' : ` · ${SKIP_COST} 🪙`}
                 </Text>
               </Pressable>
             </View>

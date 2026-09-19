@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -309,6 +310,47 @@ export default function SoloMapScreen() {
               );
             })}
 
+            {/* Chapter-transition mist banks — the fade-mask above is web-only (CSS
+                mask-image isn't a real native style prop), so on a real device the
+                two chapter photos otherwise just abut with a hard pixel seam. Rather
+                than chase a pixel-perfect photo blend (which needs a native image
+                mask library), each of the 4 boundaries gets a deliberate cloud-bank
+                that blurs across the seam and blends the two chapters' colors —
+                turning the transition into an on-purpose design beat instead of an
+                accidental cut. Fits the setting: these are floating islands in the
+                sky, so mist between realms reads as natural regardless of which two
+                chapters it's covering. */}
+            {CHAPTERS.slice(0, -1).map((ch, j) => {
+              const next = CHAPTERS[j + 1];
+              const seamY = chapterBounds[j].top;
+              const bandH = 30;
+              return (
+                <View
+                  key={`seam-${ch.name}`}
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute', left: 0, top: seamY - bandH / 2,
+                    width: mapWidth, height: bandH, overflow: 'hidden',
+                  }}
+                >
+                  <BlurView intensity={14} tint="light" style={StyleSheet.absoluteFill} />
+                  <LinearGradient
+                    colors={[
+                      withAlpha(ch.color, 0),
+                      withAlpha(ch.color, 0.22),
+                      withAlpha(next.color, 0.22),
+                      withAlpha(next.color, 0),
+                    ]}
+                    locations={[0, 0.42, 0.58, 1]}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <View style={[styles.mistWisp, { left: mapWidth * 0.14, top: bandH * 0.32, width: 110, height: 34, opacity: 0.14 }]} />
+                  <View style={[styles.mistWisp, { left: mapWidth * 0.5, top: bandH * 0.5, width: 150, height: 42, opacity: 0.18 }]} />
+                  <View style={[styles.mistWisp, { left: mapWidth * 0.7, top: bandH * 0.3, width: 95, height: 30, opacity: 0.14 }]} />
+                </View>
+              );
+            })}
+
             {/* vignette hugging the path */}
             <LinearGradient
               pointerEvents="none"
@@ -450,7 +492,7 @@ export default function SoloMapScreen() {
       />
 
       {/* CHEST MODAL */}
-      <Modal transparent visible={chestOpen} animationType="slide" onRequestClose={() => setChestOpen(false)}>
+      <Modal transparent visible={chestOpen} animationType={Platform.OS === 'web' ? 'none' : 'slide'} onRequestClose={() => setChestOpen(false)}>
         <View style={styles.overlay}>
           <View style={styles.card}>
             <Pressable style={styles.closeBtn} onPress={() => setChestOpen(false)}>
@@ -469,7 +511,7 @@ export default function SoloMapScreen() {
       </Modal>
 
       {/* HEARTS MODAL */}
-      <Modal transparent visible={heartsOpen} animationType="slide" onRequestClose={() => setHeartsOpen(false)}>
+      <Modal transparent visible={heartsOpen} animationType={Platform.OS === 'web' ? 'none' : 'slide'} onRequestClose={() => setHeartsOpen(false)}>
         <View style={styles.overlay}>
           <View style={styles.card}>
             <Pressable style={styles.closeBtn} onPress={() => setHeartsOpen(false)}>
@@ -501,7 +543,7 @@ export default function SoloMapScreen() {
       </Modal>
 
       {/* LEADERBOARD MODAL */}
-      <Modal transparent visible={boardOpen} animationType="slide" onRequestClose={() => setBoardOpen(false)}>
+      <Modal transparent visible={boardOpen} animationType={Platform.OS === 'web' ? 'none' : 'slide'} onRequestClose={() => setBoardOpen(false)}>
         <View style={styles.overlay}>
           <View style={styles.card}>
             <Pressable style={styles.closeBtn} onPress={() => setBoardOpen(false)}>
@@ -539,6 +581,9 @@ export default function SoloMapScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, overflow: 'hidden' },
+  mistWisp: {
+    position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.3)',
+  },
   chromeOverlay: { position: 'absolute', top: 0, left: 0, right: 0 },
   chromeScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 220 },
   topbar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 8 },

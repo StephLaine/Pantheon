@@ -66,11 +66,16 @@ export default function StreakReveal({ days, onDone }: Props) {
     Animated.timing(subtitleA, { toValue: 1, duration: 400, delay: 1050, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     Animated.timing(buttonA, { toValue: 1, duration: 420, delay: 1250, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
 
+    // duration: 0 on a native-driven reset step is a known trap — a truly
+    // instant native step can desync the native/JS driver bookkeeping on a
+    // real device, later throwing "Attempting to run JS driven animation on
+    // animated node that has been moved to native" from an unrelated
+    // animation on the same value. 1ms is imperceptible but sidesteps it.
     const ringLoop = (v: Animated.Value, delay: number) =>
       Animated.loop(
         Animated.sequence([
           Animated.timing(v, { toValue: 1, duration: 1600, delay, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-          Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
+          Animated.timing(v, { toValue: 0, duration: 1, useNativeDriver: true }),
         ]),
       );
     const r1 = ringLoop(ring1, 0);
@@ -82,7 +87,7 @@ export default function StreakReveal({ days, onDone }: Props) {
       Animated.loop(
         Animated.sequence([
           Animated.timing(e.drive, { toValue: 1, duration: e.duration, delay: e.delay, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-          Animated.timing(e.drive, { toValue: 0, duration: 0, useNativeDriver: true }),
+          Animated.timing(e.drive, { toValue: 0, duration: 1, useNativeDriver: true }),
         ]),
       ),
     );

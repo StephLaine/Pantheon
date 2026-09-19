@@ -21,6 +21,10 @@ interface GameStore {
   completedLevels: number[];
   streakCurrent: number;
   hasSeenStreakIntro: boolean;
+  // Pre-bought consumables from the Store — spent via useSkipToken /
+  // useFiftyFiftyToken inside a level before falling back to paying coins.
+  skipTokens: number;
+  fiftyFiftyTokens: number;
   // True as soon as a background RPC fails — e.g. the session died mid-game
   // (revoked/expired token) or the connection dropped. The UI already
   // updated optimistically when this happens, so this is the only signal
@@ -40,6 +44,10 @@ interface GameStore {
   touchDailyStreak: () => void;
   markStreakIntroSeen: () => void;
   resetGame: () => void;
+
+  buyStoreItem: (itemKey: string, qty?: number) => Promise<{ ok: boolean; error?: string }>;
+  useSkipToken: () => Promise<boolean>;
+  useFiftyFiftyToken: () => Promise<boolean>;
 }
 
 const DEFAULTS = {
@@ -49,6 +57,8 @@ const DEFAULTS = {
   completedLevels: [] as number[],
   streakCurrent: 0,
   hasSeenStreakIntro: false,
+  skipTokens: 0,
+  fiftyFiftyTokens: 0,
 };
 
 // Every mutating action below updates local state immediately (so gameplay
@@ -84,6 +94,7 @@ export const useGameStore = create<GameStore>((set, get) => {
           const row = payload.new as {
             hearts: number; coins: number; current_level: number;
             streak_current: number; has_seen_streak_intro: boolean;
+            skip_tokens: number; fifty_fifty_tokens: number;
           };
           set({
             hearts: row.hearts,
@@ -91,6 +102,8 @@ export const useGameStore = create<GameStore>((set, get) => {
             currentLevel: row.current_level,
             streakCurrent: row.streak_current,
             hasSeenStreakIntro: row.has_seen_streak_intro,
+            skipTokens: row.skip_tokens,
+            fiftyFiftyTokens: row.fifty_fifty_tokens,
           });
         },
       )
@@ -129,6 +142,8 @@ export const useGameStore = create<GameStore>((set, get) => {
       completedLevels: (completions ?? []).map((r: { level_n: number }) => r.level_n),
       streakCurrent: player?.streak_current ?? 0,
       hasSeenStreakIntro: player?.has_seen_streak_intro ?? false,
+      skipTokens: player?.skip_tokens ?? 0,
+      fiftyFiftyTokens: player?.fifty_fifty_tokens ?? 0,
     });
     subscribeToRemoteChanges(userId);
   },
@@ -198,6 +213,45 @@ export const useGameStore = create<GameStore>((set, get) => {
   resetGame: () => {
     set({ ...DEFAULTS });
     supabase.rpc('reset_progress').then(({ error }) => reportRpcResult('reset_progress', error));
+  },
+
+  // Purchases are awaited (not fire-and-forget like the rest of this file)
+  // because the Store screen needs to show a real success/failure result —
+  // "not enough coins" has to reach the player, not just log a warning.
+  // Pricing/clamping (e.g. hearts already full) lives server-side in
+  // buy_store_item, so on success this just re-fetches the true player row
+  // rather than guessing the exact effect locally.
+  buyStoreItem: async (itemKey, qty = 1) => {
+    const { error } = await supabase.rpc('buy_store_item', { p_item_key: itemKey, p_qty: qty });
+    if (error) return { ok: false, error: error.message };
+    const userId = get().userId;
+    if (userId) {
+      const { data: player } = await supabase.from('players').select('*').eq('id', userId).single();
+      if (player) {
+        set({
+          hearts: player.hearts, coins: player.coins,
+          skipTokens: player.skip_tokens, fiftyFiftyTokens: player.fifty_fifty_tokens,
+        });
+      }
+    }
+    return { ok: true };
+  },
+
+  // These are awaited (unlike loseHeart/spendCoins) because the calling
+  // level screen branches on the real result: consume a pre-bought token
+  // for free, or fall back to the existing pay-coins-on-the-spot flow.
+  useSkipToken: async () => {
+    const { data, error } = await supabase.rpc('use_skip_token');
+    if (error) { reportRpcResult('use_skip_token', error); return false; }
+    if (data) set((s) => ({ skipTokens: Math.max(0, s.skipTokens - 1) }));
+    return !!data;
+  },
+
+  useFiftyFiftyToken: async () => {
+    const { data, error } = await supabase.rpc('use_fifty_fifty_token');
+    if (error) { reportRpcResult('use_fifty_fifty_token', error); return false; }
+    if (data) set((s) => ({ fiftyFiftyTokens: Math.max(0, s.fiftyFiftyTokens - 1) }));
+    return !!data;
   },
   };
 });

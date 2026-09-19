@@ -38,6 +38,7 @@ import Level8QuizScreen from './src/screens/Level8QuizScreen';
 import Level9QuizScreen from './src/screens/Level9QuizScreen';
 import Level10QuizScreen from './src/screens/Level10QuizScreen';
 import PlaceholderScreen from './src/screens/PlaceholderScreen';
+import StoreScreen from './src/screens/StoreScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import SyncIssueBanner from './src/components/SyncIssueBanner';
@@ -47,6 +48,14 @@ import { supabase } from './src/lib/supabase';
 import { useGameStore } from './src/state/game';
 
 configureAudioSession();
+
+// Dev-only escape hatch for testing screens that require a session (map,
+// levels, modals) without a real Supabase account — set
+// EXPO_PUBLIC_DEV_SKIP_AUTH=1 in app/.env locally, never commit it as on.
+// Game-economy RPCs will fail server-side with this fake session (no real
+// auth.uid()), surfacing as the sync-issue banner — expected, harmless, and
+// the whole reason NOT to use this for the actual account/economy testing.
+const DEV_SKIP_AUTH = process.env.EXPO_PUBLIC_DEV_SKIP_AUTH === '1';
 
 const Tab = createBottomTabNavigator();
 const PlayStack = createNativeStackNavigator();
@@ -91,6 +100,10 @@ export default function App() {
   const storeLoading = useGameStore((s) => s.loading);
 
   useEffect(() => {
+    if (DEV_SKIP_AUTH) {
+      setSession({ user: { id: 'dev-skip-auth-user' } } as unknown as Session);
+      return;
+    }
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
@@ -146,9 +159,7 @@ export default function App() {
               <Tab.Screen name="Ranking">
                 {() => <PlaceholderScreen title="Classement" />}
               </Tab.Screen>
-              <Tab.Screen name="Rewards">
-                {() => <PlaceholderScreen title="Récompenses" />}
-              </Tab.Screen>
+              <Tab.Screen name="Rewards" component={StoreScreen} />
               <Tab.Screen name="Profile">
                 {() => <PlaceholderScreen title="Profil" />}
               </Tab.Screen>
